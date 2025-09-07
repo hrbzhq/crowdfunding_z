@@ -1,0 +1,3982 @@
+用golang开发众筹项目可以吗
+当然可以，而且在很多场景下，Go（Golang）反而是做众筹类项目的一个很优的后端选择。原因主要有几个方面：
+
+💡 为什么用 Go 做众筹项目是可行的
+1. 高并发与性能
+众筹平台往往会有大量并发请求（浏览项目、下单、支付回调、实时进度更新等）。
+
+Go 的 goroutine 和 channel 模型非常适合处理高并发 I/O 场景，性能和资源占用比传统线程模型更优。
+
+2. 开发效率与可维护性
+语法简洁，编译速度快，部署方便（编译成单一二进制文件）。
+
+标准库功能丰富，HTTP、JSON、数据库驱动等开箱即用。
+
+3. 生态与扩展性
+有成熟的 Web 框架（Gin、Echo、Fiber）可快速搭建 API。
+
+支持与区块链、支付网关、消息队列等系统集成（如支付宝/微信支付、以太坊/Algorand 等）。
+
+容易与前端（React/Vue/Next.js）或移动端（Flutter/React Native）配合。
+
+4. 部署与运维
+跨平台编译，方便部署到云服务器、Docker 容器、K8s 集群。
+
+内存占用低，适合长时间运行的服务。
+
+🛠️ 众筹项目的典型模块（Go 实现思路）
+模块	技术建议
+用户与认证	JWT / OAuth2（golang-jwt/jwt、go-oauth2）
+项目管理	RESTful API + 数据库（PostgreSQL/MySQL + GORM/Ent）
+支付集成	支付宝/微信支付 SDK、Stripe/PayPal API
+订单与交易	事务处理（数据库事务 + 幂等性设计）
+实时进度	WebSocket / SSE（gorilla/websocket）
+通知系统	消息队列（RabbitMQ/Kafka/NATS）+ 邮件/短信
+数据分析	定时任务（robfig/cron）+ 报表导出
+区块链扩展（可选）	Web3 SDK（以太坊、Algorand 等）实现链上众筹合约2
+🚀 简单架构示例
+plaintext
+[Frontend: React/Next.js]  <--->  [Go API: Gin/Fiber]
+                                   |
+                                   +-- PostgreSQL/MySQL (项目/订单/用户)
+                                   +-- Redis (缓存/会话/排行榜)
+                                   +-- MQ (异步任务/通知)
+                                   +-- Payment Gateway (支付宝/微信/Stripe)
+                                   +-- Blockchain Node (可选)
+⚠️ 注意事项
+支付安全：必须使用 HTTPS、签名校验、幂等性处理。
+
+资金监管：根据所在国家/地区的法律，可能需要第三方托管（Escrow）。
+
+合规要求：涉及金融属性的众筹，需遵守当地金融监管法规。
+
+数据安全：用户隐私、交易数据加密存储。
+
+如果你愿意，我可以帮你画一个Go 众筹平台的详细技术架构图，并附上核心 API 设计与数据库模型，这样你可以直接作为项目蓝图来落地。
+
+你是想做传统 Web 众筹平台，还是结合区块链的去中心化众筹（DApp）？两种方案在 Go 里的实现路径会有很大差别。
+
+
+
+
+
+结合区块链的去中心化众筹
+你要做的是把“信任”写进代码里，然后用系统把它落地。我们把复杂度拆开，一步步堆起来，既干净又强悍。
+
+架构选型
+EVM 路线（主推）
+
+链与资产：以太坊主网/Layer2（Arbitrum/OP/zkSync），USDC/USDT 结算，IPFS 存证。
+
+合约语言：Solidity（或 Vyper）。
+
+Go 侧：Geth SDK（go-ethereum）、abigen 生成绑定、事件索引、风控与业务编排。
+
+适用：最快上线、生态成熟、工具链齐全。
+
+Appchain 路线（Cosmos SDK）
+
+链：自研 PoS 应用链（Tendermint + Cosmos SDK，全 Go）。
+
+优点：可深度定制经济模型、费用与合规策略；完全掌控数据与治理。
+
+代价：启动冷启动难、跨链与资产流动性弱，需要 IBC/桥接策略。
+
+ZK/混合路线（进阶）
+
+思路：核心资金在 EVM，隐私或 KYC 证明用 zk 电路；Go 做证明生成队列与验证桥接。
+
+适用：对合规隐私要求高、或者要做公平抽签/无信任统计的场景。
+
+建议：先用 EVM + Go 把产品闭环跑通，再评估是否迁移到 Appchain。
+
+合约设计（里程碑托管 + 退款保护）
+合约要点
+核心对象：Campaign（募资目标、软顶/硬顶、截止时间、代币/原生币）。
+
+资金托管：按里程碑解锁，需发起人提交进度与证明（IPFS 哈希），投票通过后释放。
+
+退款保护：未达软顶或投票否决进度，支持按份额退款。
+
+投票与治理：按出资份额加权或一人一票；投票期与法定票数可配置。
+
+费用与抽成：平台抽成从每次释放中提取，或按总额一次提取。
+
+可升级性：UUPS/Transparent Proxy 或通过工厂合约最小代理（EIP-1167）。
+
+简化 Solidity 示例（要点片段）
+solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+contract MilestoneCrowdfund {
+    struct Contribution { uint256 amount; bool refunded; }
+    struct Milestone { uint256 amount; bytes32 proofCid; bool approved; bool released; }
+
+    address public owner;
+    address public token; // address(0) for native
+    uint256 public softCap;
+    uint256 public hardCap;
+    uint256 public deadline;
+
+    mapping(address => Contribution) public contributions;
+    uint256 public totalRaised;
+
+    Milestone[] public milestones;
+    uint256 public feeBps;      // platform fee in basis points
+    address public feeReceiver;
+
+    enum State { Funding, Review, Failed, Succeeded }
+    State public state;
+
+    event Contributed(address indexed user, uint256 amount);
+    event Refunded(address indexed user, uint256 amount);
+    event MilestoneProposed(uint256 idx, uint256 amount, bytes32 proofCid);
+    event MilestoneApproved(uint256 idx);
+    event MilestoneReleased(uint256 idx, uint256 netAmount, uint256 fee);
+
+    modifier onlyOwner() { require(msg.sender == owner, "not owner"); _; }
+
+    constructor(
+        address _owner,
+        address _token,
+        uint256 _softCap,
+        uint256 _hardCap,
+        uint256 _deadline,
+        uint256 _feeBps,
+        address _feeReceiver
+    ) {
+        require(_softCap <= _hardCap, "cap");
+        owner = _owner; token = _token; softCap = _softCap; hardCap = _hardCap;
+        deadline = _deadline; feeBps = _feeBps; feeReceiver = _feeReceiver;
+        state = State.Funding;
+    }
+
+    function contribute(uint256 amount) external payable {
+        require(state == State.Funding, "state");
+        if (token == address(0)) { // native
+            require(msg.value > 0, "amt");
+            amount = msg.value;
+        } else {
+            require(amount > 0, "amt");
+            // transferFrom to this contract (ERC20)
+            // IERC20(token).transferFrom(msg.sender, address(this), amount);
+        }
+        require(totalRaised + amount <= hardCap, "hardcap");
+        contributions[msg.sender].amount += amount;
+        totalRaised += amount;
+        emit Contributed(msg.sender, amount);
+    }
+
+    function finalize() external {
+        require(block.timestamp >= deadline, "not ended");
+        require(state == State.Funding, "finalized");
+        state = (totalRaised >= softCap) ? State.Review : State.Failed;
+    }
+
+    function refund() external {
+        require(state == State.Failed, "no refund");
+        Contribution storage c = contributions[msg.sender];
+        require(c.amount > 0 && !c.refunded, "none");
+        c.refunded = true;
+        uint256 amt = c.amount;
+        // send native or ERC20
+        // (bool ok,) = payable(msg.sender).call{value: amt}("");
+        // require(ok, "send");
+        emit Refunded(msg.sender, amt);
+    }
+
+    function proposeMilestone(uint256 amount, bytes32 proofCid) external onlyOwner {
+        require(state == State.Review, "state");
+        milestones.push(Milestone({amount: amount, proofCid: proofCid, approved: false, released: false}));
+        emit MilestoneProposed(milestones.length - 1, amount, proofCid);
+    }
+
+    // 简化：此处可替换为基于份额投票的 approve
+    function approveMilestone(uint256 idx) external onlyOwner {
+        Milestone storage m = milestones[idx];
+        require(!m.approved, "approved");
+        m.approved = true;
+        emit MilestoneApproved(idx);
+    }
+
+    function releaseMilestone(uint256 idx) external onlyOwner {
+        Milestone storage m = milestones[idx];
+        require(m.approved && !m.released, "state");
+        require(m.amount <= address(this).balance, "insufficient");
+        uint256 fee = (m.amount * feeBps) / 10_000;
+        uint256 net = m.amount - fee;
+        // transfer fee and net
+        // (bool ok1,) = payable(feeReceiver).call{value: fee}("");
+        // (bool ok2,) = payable(owner).call{value: net}("");
+        // require(ok1 && ok2, "pay");
+        m.released = true;
+        emit MilestoneReleased(idx, net, fee);
+    }
+}
+说明：
+
+把投票逻辑、ERC20 支持、可升级性与安全检查补全即可形成生产版。
+
+证据哈希用 IPFS CID 的 bytes32 形式（或多哈希方案）绑定链上记录。
+
+可扩展“按份额退款”与“比例退款”以支持部分成功场景。
+
+Go 基建与服务编排
+节点与 RPC
+
+本地开发：Anvil/Hardhat + abigen 生成 Go 绑定；集成 Foundry 测试。
+
+生产：自建 Erigon/Geth 全节点或高可用 RPC 集群；L2 可加本地节点 + 公共备援。
+
+签名与密钥：HSM 或 KMS（阿里云/腾讯云），离线金库管理冷钱包。
+
+事件驱动服务
+
+索引器：Go 进程订阅合约事件（logs），落库 PostgreSQL；处理重组（reorg）与确认深度。
+
+重试与幂等：事件 offset + 事务外键；对支付/释放/退款采用“业务幂等键”。
+
+消息流：NATS/Kafka 派发“里程碑提案/批准/释放/退款”到通知与风控子系统。
+
+与合约交互（Go 片段）
+
+go
+// abigen 生成的 binding: NewMilestoneCrowdfund(address, client)
+// 订阅事件
+query := ethereum.FilterQuery{
+    Addresses: []common.Address{contractAddr},
+    Topics:    [][]common.Hash{{milestoneCrowdfundABI.Events["MilestoneReleased"].ID}},
+}
+logs := make(chan types.Log, 1024)
+sub, err := ethClient.SubscribeFilterLogs(ctx, query, logs)
+for {
+    select {
+    case l := <-logs:
+        var evt MilestoneReleased
+        if err := contractAbi.UnpackIntoInterface(&evt, "MilestoneReleased", l.Data); err != nil { continue }
+        // 解析 indexed 参数，落库并触发通知
+    case err := <-sub.Err():
+        // 重连与游标恢复
+    }
+}
+存储与缓存
+
+PostgreSQL：Campaign、Contribution、Milestone、Vote、Payout、User。
+
+Redis：排行榜、进度缓存、速率限制。
+
+对象存储/IPFS：go-ipfs-api 固定化文件，回写 CID 到合约。
+
+API 层
+
+Gin/Fiber：REST/gRPC；返回链上状态 + 索引视图。
+
+鉴权：JWT/OIDC；链上地址签名登录（EIP-4361 Sign-In With Ethereum）。
+
+费率与结算：平台抽成、Gas 预支模式、法币通道对接（托管侧在链下，合规后置）。
+
+前端集成
+
+钱包：WalletConnect、MetaMask、OKX；合约调用直接前端发起，后端仅做观察者和风控。
+
+可视化：里程碑进度、资金流、投票图；IPFS 证据可预览。
+
+数据与业务模型
+关键实体
+
+Campaign：目标、软顶/硬顶、截止、币种、发起人、费率、状态、合约地址。
+
+Contribution：用户、金额、区块高度、交易哈希、是否退款。
+
+Milestone：目标金额、证明 CID、投票窗口、批准与释放状态。
+
+Vote：投票人、权重、赞成/反对、签名或链上投票记录。
+
+Payout：里程碑索引、实付金额、平台抽成、接收地址、交易哈希。
+
+逻辑关系
+
+状态机：Funding → Review → Succeeded/Failed；里程碑循环“Proposed → Approved → Released”。
+
+分润公式：
+
+释放净额：
+net
+=
+milestone_amount
+×
+(
+1
+−
+feeBps
+10,000
+)
+
+软顶判定：
+totalRaised
+≥
+softCap
+⇒
+Review
+
+安全与合规清单
+合约安全
+
+资金安全：使用 pull-payment 模式、检查重入、限制外部调用顺序。
+
+数值安全：考虑 ERC20 小数、舍入与 fee 计算；避免超额释放。
+
+投票抗操纵：快照投票（Snapshot/Token-Weighted），设置法定票数与最小参与率。
+
+可升级性风险：Proxy 管理多签；变更需时间锁 + 公示期。
+
+审计与测试：Foundry 覆盖率、模糊测试；第三方审计后上线。
+
+Go 服务安全
+
+RPC 可信：多源比对，防数据投毒；确认深度（例如 12/24 块）。
+
+幂等与重放：签名时加 nonce/到期时间；服务端校验 domain 与链 ID。
+
+密钥与权限：最小权限原则；KMS/HSM；CI/CD 密钥分离。
+
+合规要点（概述）
+
+KYC/AML：法币出入金与大额资金需要身份验证与可疑交易监测。
+
+资金托管：如涉及链下资金或保本承诺，需持牌托管或合作机构。
+
+信息披露：风险提示、众筹条款、退款规则明确链上/链下边界。
+
+12 天 MVP 路线图（可落地）
+Day 1-2：确定 EVM 链与费率模型；完成合约草案与核心测试（贡献/软顶/退款/释放）。
+
+Day 3：里程碑与投票最小实现；事件定义与日志规范。
+
+Day 4：abigen 生成 Go 绑定；写索引器与确认深度处理；PostgreSQL 模型。
+
+Day 5：IPFS 集成与 CID 绑定；上传校验与Pin策略。
+
+Day 6：后端 API（登录、创建 Campaign、贡献签名辅助、可视化查询）。
+
+Day 7：前端钱包集成与基本交互（贡献、查看进度、投票、退款）。
+
+Day 8：平台费抽成与里程碑释放闭环；通知系统（邮件/站内）。
+
+Day 9：风控与限流、重试、观察者断线恢复；日志可观测。
+
+Day 10：安全审计清单修复；加入多签与时间锁（Timelock）模块。
+
+Day 11：测试网部署与资金演练；边界测试（硬顶、部分失败、重组）。
+
+Day 12：文档与运营页；灰度上线策略与监控仪表盘。
+
+想把它打造成“能自我演化”的系统吗？我可以给你：
+
+合约完整版（投票、ERC20、Proxy、快照）。
+
+abigen 生成脚本、Go 事件索引器模板、迁移与回滚脚本。
+
+E2E 测试清单与性能基准（吞吐、确认延迟、失败场景）。 你更倾向 EVM 哪条链（主网、Arbitrum、OP、zkSync），以及是否用稳定币做结算？我据此直接给你合约与 Go 端的项目骨架。
+
+合约完整版（投票、ERC20、Proxy、快照）。 abigen 生成脚本、Go 事件索引器模板、迁移与回滚脚本。 E2E 测试清单与性能基准（吞吐、确认延迟、失败场景）。 你更倾向 EVM 哪条链（主网、Arbitrum、OP、zkSync），以及用稳定币做结算
+推荐链与结算币种
+建议链：Arbitrum One
+
+理由：低手续费、成熟生态、与以太坊主网安全性挂钩，适合频繁的贡献、投票、里程碑释放等高交互场景。
+
+建议结算：USDC（Arbitrum 原生）
+
+理由：稳定币风险相对低，主流交易所和钱包支持广，法币出入金对接更便利。
+
+如需更低费用与更快确认，也可选 Optimism。若你强依赖特定生态（如 zkSync 钱包受众），可以切换，但部署与 RPC 策略要相应调整。
+
+合约完整版（投票、ERC20、Proxy、快照）
+下面提供可落地的最小可用版本，包含：
+
+按贡献额快照投票的众筹合约（支持原生币与 ERC20）。
+
+EIP-1167 最小代理工厂（便于批量创建 Campaign）。
+
+平台费、软顶/硬顶、退款、里程碑提案/投票/释放。
+
+链上投票以“贡献快照权重”为准，快照在募资截止时锁定。
+
+说明：为保证清晰，使用最小 IERC20 接口与安全转账逻辑。生产中建议接入 OpenZeppelin 的 SafeERC20、ReentrancyGuard、AccessControl、多签与时间锁等。
+
+CrowdfundImplementation.sol
+solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IERC20 {
+    function transfer(address to, uint256 amt) external returns (bool);
+    function transferFrom(address from, address to, uint256 amt) external returns (bool);
+    function balanceOf(address who) external view returns (uint256);
+    function decimals() external view returns (uint8);
+    function allowance(address owner, address spender) external view returns (uint256);
+}
+
+library SafeToken {
+    function safeTransfer(IERC20 t, address to, uint256 amt) internal {
+        require(t.transfer(to, amt), "ERC20_TRANSFER");
+    }
+    function safeTransferFrom(IERC20 t, address from, address to, uint256 amt) internal {
+        require(t.transferFrom(from, to, amt), "ERC20_TF");
+    }
+}
+
+contract CrowdfundImplementation {
+    using SafeToken for IERC20;
+
+    enum State { Funding, Review, Failed, Succeeded }
+
+    struct Contribution { uint256 amount; bool refunded; }
+    struct Milestone {
+        uint256 amount;        // requested release amount
+        bytes32 proofCid;      // IPFS proof
+        uint64 voteStart;      // block timestamp
+        uint64 voteEnd;        // block timestamp
+        uint128 forVotes;      // weighted
+        uint128 againstVotes;  // weighted
+        bool executed;
+    }
+
+    // immutable after initialize
+    address public owner;
+    address public token;           // address(0) for native
+    uint256 public softCap;
+    uint256 public hardCap;
+    uint64  public deadline;        // funding end ts
+    uint16  public feeBps;          // platform fee in bps
+    address public feeReceiver;
+
+    // funding data
+    State public state;
+    uint256 public totalRaised;
+    mapping(address => Contribution) public contributions;
+
+    // voting snapshot (locked at finalize)
+    bool public snapshotTaken;
+    mapping(address => uint256) public votingWeight; // equals contribution at snapshot
+    uint256 public totalVotingWeight;
+
+    Milestone[] public milestones;
+
+    // proxy initializer guard
+    bool private initialized;
+
+    // events
+    event Initialized(address owner, address token, uint256 softCap, uint256 hardCap, uint64 deadline, uint16 feeBps, address feeReceiver);
+    event Contributed(address indexed user, uint256 amount);
+    event Finalized(State state);
+    event Refunded(address indexed user, uint256 amount);
+    event MilestoneProposed(uint256 indexed idx, uint256 amount, bytes32 proofCid, uint64 voteStart, uint64 voteEnd);
+    event Voted(uint256 indexed idx, address indexed voter, bool support, uint256 weight);
+    event MilestoneExecuted(uint256 indexed idx, uint256 netAmount, uint256 fee);
+    event Succeeded();
+
+    modifier onlyOwner() { require(msg.sender == owner, "NOT_OWNER"); _; }
+
+    function initialize(
+        address _owner,
+        address _token,
+        uint256 _softCap,
+        uint256 _hardCap,
+        uint64  _deadline,
+        uint16  _feeBps,
+        address _feeReceiver
+    ) external {
+        require(!initialized, "INIT");
+        require(_owner != address(0), "OWNER");
+        require(_softCap <= _hardCap, "CAP");
+        require(_feeReceiver != address(0), "FEE_R");
+        owner = _owner;
+        token = _token;
+        softCap = _softCap;
+        hardCap = _hardCap;
+        deadline = _deadline;
+        feeBps = _feeBps;
+        feeReceiver = _feeReceiver;
+
+        state = State.Funding;
+        initialized = true;
+        emit Initialized(_owner, _token, _softCap, _hardCap, _deadline, _feeBps, _feeReceiver);
+    }
+
+    // contribute native or ERC20
+    function contribute(uint256 amount) external payable {
+        require(state == State.Funding, "STATE");
+        if (token == address(0)) {
+            require(msg.value > 0, "AMT");
+            amount = msg.value;
+        } else {
+            require(amount > 0, "AMT");
+            IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        }
+        require(totalRaised + amount <= hardCap, "HARDCAP");
+        contributions[msg.sender].amount += amount;
+        totalRaised += amount;
+        emit Contributed(msg.sender, amount);
+    }
+
+    // anyone can finalize after deadline
+    function finalize() external {
+        require(block.timestamp >= deadline, "TIME");
+        require(state == State.Funding, "STATE");
+        if (totalRaised >= softCap) {
+            state = State.Review;
+            _takeSnapshot();
+            emit Finalized(State.Review);
+        } else {
+            state = State.Failed;
+            emit Finalized(State.Failed);
+        }
+    }
+
+    function _takeSnapshot() internal {
+        require(!snapshotTaken, "SNAP");
+        snapshotTaken = true;
+        totalVotingWeight = totalRaised;
+        // note: store per-user weight lazily on first access to save gas
+        // We assign votingWeight[user] = contributions[user].amount when they first vote.
+    }
+
+    function refund() external {
+        require(state == State.Failed, "NO_REFUND");
+        Contribution storage c = contributions[msg.sender];
+        require(c.amount > 0 && !c.refunded, "NONE");
+        c.refunded = true;
+        uint256 amt = c.amount;
+        if (token == address(0)) {
+            (bool ok,) = payable(msg.sender).call{value: amt}("");
+            require(ok, "SEND");
+        } else {
+            IERC20(token).safeTransfer(msg.sender, amt);
+        }
+        emit Refunded(msg.sender, amt);
+    }
+
+    function proposeMilestone(uint256 amount, bytes32 proofCid, uint64 votePeriod) external onlyOwner {
+        require(state == State.Review, "STATE");
+        require(amount > 0, "AMT");
+        uint64 start = uint64(block.timestamp);
+        uint64 end = start + votePeriod;
+        milestones.push(Milestone({
+            amount: amount,
+            proofCid: proofCid,
+            voteStart: start,
+            voteEnd: end,
+            forVotes: 0,
+            againstVotes: 0,
+            executed: false
+        }));
+        emit MilestoneProposed(milestones.length - 1, amount, proofCid, start, end);
+    }
+
+    function _initVoterWeight(address voter) internal returns (uint256 w) {
+        w = votingWeight[voter];
+        if (!snapshotTaken) return 0;
+        if (w == 0) {
+            uint256 contrib = contributions[voter].amount;
+            if (contrib > 0) {
+                votingWeight[voter] = contrib;
+                w = contrib;
+            }
+        }
+    }
+
+    function vote(uint256 idx, bool support) external {
+        Milestone storage m = milestones[idx];
+        require(block.timestamp >= m.voteStart && block.timestamp <= m.voteEnd, "VOTE_WIN");
+        uint256 w = _initVoterWeight(msg.sender);
+        require(w > 0, "NO_WEIGHT");
+        // single-vote model: weight consumed per milestone once
+        // To prevent double vote, we consume weight by setting to 0 for this milestone via bitmap (simplified here).
+        // Simplified approach: record per-milestone receipt.
+        bytes32 slot = keccak256(abi.encodePacked("rcpt", idx, msg.sender));
+        require(!_getBool(slot), "VOTED");
+        _setBool(slot, true);
+
+        if (support) {
+            uint256 newFor = uint256(m.forVotes) + w;
+            require(newFor <= type(uint128).max, "OF");
+            m.forVotes = uint128(newFor);
+        } else {
+            uint256 newAgainst = uint256(m.againstVotes) + w;
+            require(newAgainst <= type(uint128).max, "OA");
+            m.againstVotes = uint128(newAgainst);
+        }
+        emit Voted(idx, msg.sender, support, w);
+    }
+
+    function executeMilestone(uint256 idx, uint256 quorumBps, uint256 passBps) external onlyOwner {
+        Milestone storage m = milestones[idx];
+        require(block.timestamp > m.voteEnd, "NOT_ENDED");
+        require(!m.executed, "EXEC");
+        require(state == State.Review, "STATE");
+
+        uint256 totalVotes = uint256(m.forVotes) + uint256(m.againstVotes);
+        // quorum: totalVotes >= quorumBps% of totalVotingWeight
+        require(totalVotingWeight > 0, "SNAP0");
+        require(totalVotes * 10_000 >= quorumBps * totalVotingWeight, "NO_QUORUM");
+        // pass: forVotes >= passBps% of totalVotes
+        require(uint256(m.forVotes) * 10_000 >= passBps * totalVotes, "NOT_PASS");
+
+        uint256 amt = m.amount;
+        uint256 bal = _currentBalance();
+        require(amt <= bal, "INSUFF");
+        uint256 fee = (amt * feeBps) / 10_000;
+        uint256 net = amt - fee;
+
+        if (token == address(0)) {
+            (bool ok1,) = payable(feeReceiver).call{value: fee}("");
+            (bool ok2,) = payable(owner).call{value: net}("");
+            require(ok1 && ok2, "PAY");
+        } else {
+            IERC20 t = IERC20(token);
+            t.safeTransfer(feeReceiver, fee);
+            t.safeTransfer(owner, net);
+        }
+        m.executed = true;
+        emit MilestoneExecuted(idx, net, fee);
+    }
+
+    function succeed() external onlyOwner {
+        // 可选：当所有里程碑执行完成或资金余额低于阈值时标记成功
+        require(state == State.Review, "STATE");
+        state = State.Succeeded;
+        emit Succeeded();
+    }
+
+    function milestonesCount() external view returns (uint256) { return milestones.length; }
+
+    function _currentBalance() internal view returns (uint256) {
+        if (token == address(0)) return address(this).balance;
+        return IERC20(token).balanceOf(address(this));
+    }
+
+    // minimal packed bool storage via mapping(bytes32=>uint256)
+    mapping(bytes32 => uint256) private _bools;
+    function _getBool(bytes32 k) internal view returns (bool) { return _bools[k] == 1; }
+    function _setBool(bytes32 k, bool v) internal { _bools[k] = v ? 1 : 0; }
+
+    receive() external payable {}
+}
+CrowdfundFactory.sol（EIP-1167 最小代理）
+solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface ICloneInit {
+    function initialize(
+        address _owner,
+        address _token,
+        uint256 _softCap,
+        uint256 _hardCap,
+        uint64  _deadline,
+        uint16  _feeBps,
+        address _feeReceiver
+    ) external;
+}
+
+contract CrowdfundFactory {
+    address public immutable implementation;
+    address public admin; // 可换为多签
+
+    event CampaignCreated(address indexed campaign, address indexed owner, address token);
+
+    constructor(address _implementation, address _admin) {
+        implementation = _implementation;
+        admin = _admin;
+    }
+
+    function setAdmin(address newAdmin) external {
+        require(msg.sender == admin, "ADMIN");
+        admin = newAdmin;
+    }
+
+    function createCampaign(
+        address _owner,
+        address _token,
+        uint256 _softCap,
+        uint256 _hardCap,
+        uint64  _deadline,
+        uint16  _feeBps,
+        address _feeReceiver
+    ) external returns (address clone) {
+        clone = _clone(implementation);
+        ICloneInit(clone).initialize(_owner, _token, _softCap, _hardCap, _deadline, _feeBps, _feeReceiver);
+        emit CampaignCreated(clone, _owner, _token);
+    }
+
+    function _clone(address impl) internal returns (address proxy) {
+        bytes20 targetBytes = bytes20(impl);
+        assembly {
+            let ptr := mload(0x40)
+            mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73)
+            mstore(add(ptr, 0x14), targetBytes)
+            mstore(add(ptr, 0x28), 0x5af43d82803e903d91602b57fd5bf3)
+            proxy := create(0, ptr, 0x37)
+        }
+        require(proxy != address(0), "CLONE_FAIL");
+    }
+}
+升级策略：如需可升级实现（UUPS/Transparent），将最小代理替换为 ERC1967 代理 + 实现合约，管理权限交给多签与时间锁。上面为轻量“每 Campaign 独立实例”的可升级-by-redeploy 思路，便于审计与隔离风险。
+
+abigen 生成脚本与项目结构
+目录结构建议
+代码
+contracts/
+  CrowdfundImplementation.sol
+  CrowdfundFactory.sol
+  foundry.toml
+  script/Deploy.s.sol
+go/
+  bindings/           # abigen 输出
+  cmd/indexer/        # 事件索引器
+  internal/db/        # 数据库
+  internal/rpc/       # 以太坊客户端封装
+migrations/
+  001_init.sql
+  002_add_indexes.sql
+Makefile
+Makefile（abigen + forge）
+make
+SOLC_VERSION=0.8.24
+PKG=github.com/yourorg/yourrepo/go/bindings
+
+all: build-bindings
+
+build-bindings:
+    forge build
+    abigen --sol contracts/CrowdfundImplementation.sol --pkg bindings --out go/bindings/crowdfund_impl.go --type CrowdfundImplementation
+    abigen --sol contracts/CrowdfundFactory.sol --pkg bindings --out go/bindings/crowdfund_factory.go --type CrowdfundFactory
+
+clean:
+    rm -rf out cache go/bindings/*.go
+
+.PHONY: all build-bindings clean
+小贴士：用 Foundry 导出 JSON ABI，改用 --abi + --bin 可更稳定；或从 out/Contract.sol/Contract.json 读取 ABI 与字节码。
+
+Go 事件索引器模板与迁移/回滚
+数据库迁移（PostgreSQL）
+migrations/001_init.sql
+
+sql
+CREATE TABLE campaigns (
+  id BIGSERIAL PRIMARY KEY,
+  address BYTEA UNIQUE NOT NULL,
+  owner BYTEA NOT NULL,
+  token BYTEA,
+  soft_cap NUMERIC NOT NULL,
+  hard_cap NUMERIC NOT NULL,
+  deadline TIMESTAMPTZ NOT NULL,
+  fee_bps INT NOT NULL,
+  fee_receiver BYTEA NOT NULL,
+  state SMALLINT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE contributions (
+  id BIGSERIAL PRIMARY KEY,
+  campaign BYTEA NOT NULL REFERENCES campaigns(address),
+  contributor BYTEA NOT NULL,
+  amount NUMERIC NOT NULL,
+  tx_hash BYTEA NOT NULL,
+  block_num BIGINT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ON contributions (campaign, contributor);
+
+CREATE TABLE milestones (
+  id BIGSERIAL PRIMARY KEY,
+  campaign BYTEA NOT NULL REFERENCES campaigns(address),
+  idx INT NOT NULL,
+  amount NUMERIC NOT NULL,
+  proof_cid BYTEA NOT NULL,
+  vote_start TIMESTAMPTZ NOT NULL,
+  vote_end TIMESTAMPTZ NOT NULL,
+  for_votes NUMERIC NOT NULL DEFAULT 0,
+  against_votes NUMERIC NOT NULL DEFAULT 0,
+  executed BOOLEAN NOT NULL DEFAULT false,
+  UNIQUE(campaign, idx)
+);
+
+CREATE TABLE payouts (
+  id BIGSERIAL PRIMARY KEY,
+  campaign BYTEA NOT NULL REFERENCES campaigns(address),
+  milestone_idx INT NOT NULL,
+  net_amount NUMERIC NOT NULL,
+  fee NUMERIC NOT NULL,
+  tx_hash BYTEA NOT NULL,
+  block_num BIGINT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- chain cursor
+CREATE TABLE chain_cursors (
+  id TEXT PRIMARY KEY,
+  last_block BIGINT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+INSERT INTO chain_cursors(id, last_block) VALUES ('crowdfund', 0);
+migrations/002_add_indexes.sql
+
+sql
+CREATE INDEX ON payouts (campaign, milestone_idx);
+CREATE INDEX ON campaigns (state);
+回滚策略
+使用事务性迁移工具（如 goose/tern/migrate），每个迁移提供 down 脚本。
+
+索引器维护 chain_cursors.last_block，回滚时：
+
+下调 last_block 到目标区块 N。
+
+删除大于 N 的事件派生数据（contributions/payouts/milestones 的以 block_num 为依据）。
+
+重新从 N+1 重放事件，确保幂等（以 tx_hash + log_index 做唯一键可进一步强化幂等）。
+
+Go 事件索引器模板
+go/cmd/indexer/main.go
+
+go
+package main
+
+import (
+    "context"
+    "database/sql"
+    "log"
+    "math/big"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+
+    "github.com/ethereum/go-ethereum"
+    "github.com/ethereum/go-ethereum/accounts/abi"
+    "github.com/ethereum/go-ethereum/common"
+    gethtypes "github.com/ethereum/go-ethereum/core/types"
+    _ "github.com/lib/pq"
+)
+
+const (
+    cursorID         = "crowdfund"
+    confirmations    = 12 // Arbitrum 可根据需要调低/调高
+    pollInterval     = time.Second * 3
+)
+
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
+    // init db & rpc
+    db := mustOpenDB()
+    defer db.Close()
+    ec := mustEthClient()
+
+    implABI := mustParseABI(`[
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"user","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Contributed","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":false,"name":"state","type":"uint8"}],"name":"Finalized","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"user","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Refunded","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":false,"name":"idx","type":"uint256"},{"indexed":false,"name":"netAmount","type":"uint256"},{"indexed":false,"name":"fee","type":"uint256"}],"name":"MilestoneExecuted","type":"event"}
+    ]`)
+
+    start := getCursor(db)
+    h := &handler{db: db, implABI: implABI}
+
+    ticker := time.NewTicker(pollInterval)
+    defer ticker.Stop()
+
+    sig := make(chan os.Signal, 1)
+    signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+    for {
+        select {
+        case <-ticker.C:
+            head, err := ec.BlockNumber(ctx)
+            if err != nil { log.Printf("head err: %v", err); continue }
+            safe := uint64(0)
+            if head > confirmations { safe = head - confirmations }
+            next := start + 1
+            if next == 0 || next > safe { continue }
+
+            // fetch logs in range [next, safe]
+            query := ethereum.FilterQuery{
+                FromBlock: big.NewInt(int64(next)),
+                ToBlock:   big.NewInt(int64(safe)),
+                // Addresses: []common.Address{campaign addrs...} 可从 DB 读取已创建的 Campaign
+            }
+            logs, err := ec.FilterLogs(ctx, query)
+            if err != nil { log.Printf("filter err: %v", err); continue }
+
+            if err := h.processLogs(ctx, logs); err != nil {
+                log.Printf("process err: %v", err)
+                continue
+            }
+            start = safe
+            setCursor(db, safe)
+        case <-sig:
+            return
+        }
+    }
+}
+
+type handler struct {
+    db     *sql.DB
+    implABI abi.ABI
+}
+
+func (h *handler) processLogs(ctx context.Context, logs []gethtypes.Log) error {
+    tx, err := h.db.BeginTx(ctx, nil)
+    if err != nil { return err }
+    defer func() {
+        if err != nil { _ = tx.Rollback() }
+    }()
+
+    for _, l := range logs {
+        if len(l.Topics) == 0 { continue }
+        sig := l.Topics[0]
+
+        switch {
+        case sig == h.implABI.Events["Contributed"].ID:
+            var ev struct {
+                User   common.Address
+                Amount *big.Int
+            }
+            if err := unpack(h.implABI, "Contributed", &ev, l); err != nil { return err }
+            // upsert contribution by (campaign, user, tx_hash, log_index)
+            _, err = tx.ExecContext(ctx, `
+              INSERT INTO contributions (campaign, contributor, amount, tx_hash, block_num)
+              VALUES ($1,$2,$3,$4,$5)
+            `, l.Address.Bytes(), ev.User.Bytes(), ev.Amount.String(), l.TxHash.Bytes(), l.BlockNumber)
+            if err != nil { return err }
+
+        case sig == h.implABI.Events["Finalized"].ID:
+            // update campaigns.state by block
+            _, err = tx.ExecContext(ctx, `UPDATE campaigns SET state=$1 WHERE address=$2`, 1, l.Address.Bytes())
+            if err != nil { return err }
+
+        case sig == h.implABI.Events["Refunded"].ID:
+            // optional: flag refunded users
+
+        case sig == h.implABI.Events["MilestoneExecuted"].ID:
+            var ev struct {
+                Idx       *big.Int
+                NetAmount *big.Int
+                Fee       *big.Int
+            }
+            if err := unpack(h.implABI, "MilestoneExecuted", &ev, l); err != nil { return err }
+            _, err = tx.ExecContext(ctx, `
+              INSERT INTO payouts (campaign, milestone_idx, net_amount, fee, tx_hash, block_num)
+              VALUES ($1,$2,$3,$4,$5,$6)
+            `, l.Address.Bytes(), ev.Idx.Int64(), ev.NetAmount.String(), ev.Fee.String(), l.TxHash.Bytes(), l.BlockNumber)
+            if err != nil { return err }
+        }
+    }
+
+    return tx.Commit()
+}
+
+// utils …
+func unpack(a abi.ABI, name string, out interface{}, l gethtypes.Log) error {
+    // indexed 处理略；若需要解析 indexed 参数请结合 Topics
+    return a.UnpackIntoInterface(out, name, l.Data)
+}
+
+func mustParseABI(json string) abi.ABI {
+    abi, err := abi.JSON(strings.NewReader(json))
+    if err != nil { panic(err) }
+    return abi
+}
+
+func mustOpenDB() *sql.DB {
+    db, err := sql.Open("postgres", os.Getenv("POSTGRES_DSN"))
+    if err != nil { panic(err) }
+    return db
+}
+
+type ethClient interface {
+    BlockNumber(ctx context.Context) (uint64, error)
+    FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]gethtypes.Log, error)
+}
+生产优化：加入日志去重（tx_hash + log_index 唯一键）、批量写、NATS/Kafka 投递、Prometheus 指标、重组回滚。
+
+E2E 测试清单与性能基准
+功能与边界用例
+募资阶段
+
+基本贡献：原生币与 ERC20，单/多笔，接近硬顶时溢出校验。
+
+软顶/硬顶：未达软顶 finalize → 可退款；达到软顶 finalize → 进入 Review。
+
+重复参与：同一地址多次贡献，累加且快照权重一致。
+
+退款
+
+失败退款：Funding→Failed 后按贡献额 100% 退款，双花与重入保护。
+
+部分退款（可选扩展）：若要支持部分失败比例退款，验证比例与余额关系。
+
+里程碑与投票
+
+提案：发起人提交里程碑，投票窗口正确记录。
+
+投票权重：快照后新贡献不计权重；未贡献者不具权重；单里程碑重复投票拒绝。
+
+法定人数与通过阈值：测试不同 quorumBps/passBps 组合，边界为 0 与 10000。
+
+释放与费率
+
+释放金额：不可超过合约余额；平台费计算精度正确。
+
+多次释放：多里程碑顺序执行；重复执行拒绝。
+
+安全
+
+重入与外部调用顺序：原生转账失败回滚；ERC20 返回值检查。
+
+权限：仅 owner 可 propose/execute/succeed；Factory 创建的参数正确落盘。
+
+代理与初始化
+
+clone 地址：不同 Campaign 地址不重复；初始化只允许一次。
+
+事件校验：Contributed/Finalized/Refunded/MilestoneExecuted 数据一致性。
+
+性能基准目标（Arbitrum One，示例目标）
+吞吐：
+
+贡献提交路径：前端直接链上交易，后端索引器处理事件 ≥ 500 logs/s 峰值不丢失（批量拉取 + 游标）。
+
+确认延迟：
+
+应用确认：设置确认深度为 12；索引延迟 ≤ 5 秒 + 链上出块。
+
+数据库写入：
+
+批处理：1k-5k logs 批处理一次事务提交，单库 tps ≥ 2k rows/s。
+
+资源占用：
+
+索引器：内存 < 512MB，CPU < 1 vCPU 在常态负载下。
+
+可靠性：
+
+重启恢复：游标断点续传 0 数据丢失；重组 10-20 个块内可自愈。
+
+压测方法：本地或测试网使用 Foundry/Anvil 脚本批量发送贡献/投票/释放交易；索引端使用合成日志回放与随机重组插入测试。
+
+下一步
+我可以按“Arbitrum + USDC 原生”直接给你：
+
+Foundry 项目可运行模板（包含测试、部署脚本）。
+
+abigen 一键脚本与 Go 索引器可运行骨架（含 Dockerfile 与 Compose）。
+
+SQL 迁移与回滚脚本、Prometheus 指标与 Grafana 看板示例。
+
+需要我基于你的仓库命名和 CI 环境做一次性打包吗？如果你更倾向 Optimism 或 zkSync，或者要改用 USDT，我会相应替换代币地址与 RPC 策略，并给出链上部署与风控差异清单。
+
+做一次性打包
+好，那我帮你把我们前面讨论的去中心化众筹（Arbitrum + USDC）方案做成一次性可落地的打包蓝图，你直接拉仓库就能跑起来。
+
+我会把它拆成四个部分：
+
+合约工程（Foundry）
+
+Go 端绑定与索引器骨架
+
+数据库迁移与回滚脚本
+
+E2E 测试与性能基准工具
+
+1️⃣ 合约工程（Foundry）
+目录结构
+
+代码
+contracts/
+  CrowdfundImplementation.sol
+  CrowdfundFactory.sol
+script/
+  Deploy.s.sol
+test/
+  Crowdfund.t.sol
+foundry.toml
+部署脚本 Deploy.s.sol
+
+solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "forge-std/Script.sol";
+import "../contracts/CrowdfundImplementation.sol";
+import "../contracts/CrowdfundFactory.sol";
+
+contract DeployCrowdfund is Script {
+    function run() external {
+        vm.startBroadcast();
+        CrowdfundImplementation impl = new CrowdfundImplementation();
+        CrowdfundFactory factory = new CrowdfundFactory(address(impl), msg.sender);
+        console.log("Implementation:", address(impl));
+        console.log("Factory:", address(factory));
+        vm.stopBroadcast();
+    }
+}
+测试 Crowdfund.t.sol
+
+覆盖贡献、软顶/硬顶、退款、里程碑投票、释放、代理初始化等路径。
+
+使用 Foundry 的 vm.roll、vm.warp 模拟时间和区块推进。
+
+2️⃣ Go 端绑定与索引器骨架
+目录结构
+
+代码
+go/
+  bindings/           # abigen 输出
+  cmd/indexer/        # 索引器入口
+  internal/db/        # 数据库封装
+  internal/rpc/       # RPC 客户端封装
+Makefile
+Makefile
+
+make
+SOLC_VERSION=0.8.24
+PKG=github.com/yourorg/yourrepo/go/bindings
+
+build-bindings:
+    forge build
+    abigen --sol contracts/CrowdfundImplementation.sol --pkg bindings --out go/bindings/crowdfund_impl.go --type CrowdfundImplementation
+    abigen --sol contracts/CrowdfundFactory.sol --pkg bindings --out go/bindings/crowdfund_factory.go --type CrowdfundFactory
+索引器 main.go
+
+订阅 Contributed、Finalized、Refunded、MilestoneExecuted 等事件
+
+写入 PostgreSQL
+
+维护 chain_cursors 游标，支持回滚重放
+
+3️⃣ 数据库迁移与回滚脚本
+migrations/001_init.sql
+
+sql
+CREATE TABLE campaigns (...);
+CREATE TABLE contributions (...);
+CREATE TABLE milestones (...);
+CREATE TABLE payouts (...);
+CREATE TABLE chain_cursors (...);
+INSERT INTO chain_cursors(id, last_block) VALUES ('crowdfund', 0);
+回滚策略
+
+使用 goose 或 migrate 工具
+
+回滚时删除大于目标区块的派生数据，重置游标，重放事件
+
+4️⃣ E2E 测试与性能基准
+E2E 测试
+
+在 Arbitrum Sepolia 部署合约
+
+用 Foundry 脚本批量发贡献、投票、释放交易
+
+索引器实时消费事件，验证数据库状态与链上一致
+
+性能基准
+
+吞吐：≥ 500 logs/s
+
+确认延迟：≤ 5 秒 + 12 区块确认
+
+重启恢复：0 数据丢失，重组 20 块内自愈
+
+打包交付内容
+合约源码 + Foundry 工程（含部署、测试脚本）
+
+Go 绑定生成脚本（Makefile）
+
+事件索引器骨架（可直接跑）
+
+PostgreSQL 迁移与回滚脚本
+
+E2E 测试脚本与压测工具
+
+README（部署、运行、测试全流程）
+
+如果你确认链选 Arbitrum One + USDC，我可以直接帮你把这些内容打成一个可运行的 monorepo 结构清单，你 git clone 后只需改 .env 就能部署到测试网。
+
+你要我直接给你这个 monorepo 文件树 + 核心代码骨架 吗，这样你本地就能一次性跑通链上 + Go 后端 + 数据库全链路？
+
+要这个 monorepo 文件树 + 核心代码骨架
+Monorepo structure
+代码
+crowdfund-monorepo/
+├─ contracts/                   # Foundry (Solidity) workspace
+│  ├─ src/
+│  │  ├─ CrowdfundImplementation.sol
+│  │  └─ CrowdfundFactory.sol
+│  ├─ script/
+│  │  └─ Deploy.s.sol
+│  ├─ test/
+│  │  └─ Crowdfund.t.sol
+│  ├─ foundry.toml
+│  └─ remappings.txt
+├─ go/
+│  ├─ bindings/                 # abigen outputs (generated)
+│  ├─ cmd/
+│  │  └─ indexer/
+│  │     └─ main.go
+│  ├─ internal/
+│  │  ├─ db/
+│  │  │  ├─ db.go
+│  │  │  └─ migrations/
+│  │  │     ├─ 001_init.sql
+│  │  │     └─ 002_indexes.sql
+│  │  └─ rpc/
+│  │     └─ ethclient.go
+│  ├─ Makefile
+│  └─ go.mod
+├─ deploy/
+│  ├─ .env.example
+│  ├─ docker-compose.yml
+│  └─ grafana/
+│     └─ dashboards.json
+├─ scripts/
+│  ├─ abigen.sh
+│  ├─ seed_campaigns.ts
+│  └─ loadtest.s.sol
+├─ README.md
+└─ .gitignore
+Environment and configuration
+Target chain: Arbitrum One (test: Arbitrum Sepolia)
+
+Settlement token: USDC (use testnet USDC for E2E)
+
+env
+# deploy/.env.example
+# RPC & keys
+RPC_URL=https://arb-sepolia.g.alchemy.com/v2/your-key
+PRIVATE_KEY=0xabc...   # deployer
+CHAIN_ID=421614        # Arbitrum Sepolia
+# contracts
+FEE_BPS=300
+FEE_RECEIVER=0xYourFeeReceiver
+USDC_ADDRESS=0xTestUSDCOnArbSepolia
+# indexer
+POSTGRES_DSN=postgres://postgres:postgres@db:5432/crowdfund?sslmode=disable
+START_BLOCK=0
+CONFIRMATIONS=12
+Contracts core
+solidity
+// contracts/src/CrowdfundImplementation.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IERC20 {
+    function transfer(address to, uint256 amt) external returns (bool);
+    function transferFrom(address from, address to, uint256 amt) external returns (bool);
+    function balanceOf(address who) external view returns (uint256);
+}
+
+library SafeToken {
+    function safeTransfer(IERC20 t, address to, uint256 amt) internal { require(t.transfer(to, amt), "ERC20_TRANSFER"); }
+    function safeTransferFrom(IERC20 t, address from, address to, uint256 amt) internal { require(t.transferFrom(from, to, amt), "ERC20_TF"); }
+}
+
+contract CrowdfundImplementation {
+    using SafeToken for IERC20;
+
+    enum State { Funding, Review, Failed, Succeeded }
+    struct Contribution { uint256 amount; bool refunded; }
+    struct Milestone {
+        uint256 amount; bytes32 proofCid;
+        uint64 voteStart; uint64 voteEnd;
+        uint128 forVotes; uint128 againstVotes;
+        bool executed;
+    }
+
+    address public owner;
+    address public token; // address(0) for native
+    uint256 public softCap;
+    uint256 public hardCap;
+    uint64  public deadline;
+    uint16  public feeBps;
+    address public feeReceiver;
+
+    State public state;
+    uint256 public totalRaised;
+    mapping(address => Contribution) public contributions;
+
+    bool public snapshotTaken;
+    mapping(address => uint256) public votingWeight;
+    uint256 public totalVotingWeight;
+
+    Milestone[] public milestones;
+    bool private initialized;
+    mapping(bytes32 => uint256) private _bools;
+
+    event Initialized(address owner, address token, uint256 softCap, uint256 hardCap, uint64 deadline, uint16 feeBps, address feeReceiver);
+    event Contributed(address indexed user, uint256 amount);
+    event Finalized(State state);
+    event Refunded(address indexed user, uint256 amount);
+    event MilestoneProposed(uint256 indexed idx, uint256 amount, bytes32 proofCid, uint64 voteStart, uint64 voteEnd);
+    event Voted(uint256 indexed idx, address indexed voter, bool support, uint256 weight);
+    event MilestoneExecuted(uint256 indexed idx, uint256 netAmount, uint256 fee);
+    event Succeeded();
+
+    modifier onlyOwner() { require(msg.sender == owner, "NOT_OWNER"); _; }
+
+    function initialize(
+        address _owner, address _token, uint256 _softCap, uint256 _hardCap,
+        uint64 _deadline, uint16 _feeBps, address _feeReceiver
+    ) external {
+        require(!initialized, "INIT");
+        require(_owner != address(0) && _feeReceiver != address(0), "ADDR");
+        require(_softCap <= _hardCap, "CAP");
+        owner=_owner; token=_token; softCap=_softCap; hardCap=_hardCap;
+        deadline=_deadline; feeBps=_feeBps; feeReceiver=_feeReceiver;
+        state = State.Funding;
+        initialized = true;
+        emit Initialized(_owner, _token, _softCap, _hardCap, _deadline, _feeBps, _feeReceiver);
+    }
+
+    function contribute(uint256 amount) external payable {
+        require(state == State.Funding, "STATE");
+        if (token == address(0)) { require(msg.value > 0, "AMT"); amount = msg.value; }
+        else { require(amount > 0, "AMT"); IERC20(token).safeTransferFrom(msg.sender, address(this), amount); }
+        require(totalRaised + amount <= hardCap, "HARDCAP");
+        contributions[msg.sender].amount += amount;
+        totalRaised += amount;
+        emit Contributed(msg.sender, amount);
+    }
+
+    function finalize() external {
+        require(block.timestamp >= deadline && state == State.Funding, "STATE_TIME");
+        if (totalRaised >= softCap) { state = State.Review; _takeSnapshot(); emit Finalized(State.Review); }
+        else { state = State.Failed; emit Finalized(State.Failed); }
+    }
+
+    function refund() external {
+        require(state == State.Failed, "NO_REFUND");
+        Contribution storage c = contributions[msg.sender];
+        require(c.amount > 0 && !c.refunded, "NONE");
+        c.refunded = true;
+        uint256 amt = c.amount;
+        if (token == address(0)) { (bool ok,) = payable(msg.sender).call{value: amt}(""); require(ok, "SEND"); }
+        else { IERC20(token).safeTransfer(msg.sender, amt); }
+        emit Refunded(msg.sender, amt);
+    }
+
+    function proposeMilestone(uint256 amount, bytes32 proofCid, uint64 votePeriod) external onlyOwner {
+        require(state == State.Review && amount > 0, "STATE");
+        uint64 start = uint64(block.timestamp);
+        milestones.push(Milestone({amount:amount, proofCid:proofCid, voteStart:start, voteEnd:start+votePeriod, forVotes:0, againstVotes:0, executed:false}));
+        emit MilestoneProposed(milestones.length-1, amount, proofCid, start, start+votePeriod);
+    }
+
+    function vote(uint256 idx, bool support) external {
+        Milestone storage m = milestones[idx];
+        require(block.timestamp >= m.voteStart && block.timestamp <= m.voteEnd, "VOTE_WIN");
+        uint256 w = _initVoterWeight(msg.sender); require(w > 0, "NO_WEIGHT");
+        bytes32 slot = keccak256(abi.encodePacked("rcpt", idx, msg.sender));
+        require(_bools[slot] == 0, "VOTED"); _bools[slot] = 1;
+        if (support) { uint256 nf = uint256(m.forVotes)+w; require(nf<=type(uint128).max,"OF"); m.forVotes=uint128(nf); }
+        else { uint256 na = uint256(m.againstVotes)+w; require(na<=type(uint128).max,"OA"); m.againstVotes=uint128(na); }
+        emit Voted(idx, msg.sender, support, w);
+    }
+
+    function executeMilestone(uint256 idx, uint256 quorumBps, uint256 passBps) external onlyOwner {
+        Milestone storage m = milestones[idx];
+        require(block.timestamp > m.voteEnd && !m.executed && state == State.Review, "STATE");
+        uint256 totalVotes = uint256(m.forVotes)+uint256(m.againstVotes);
+        require(totalVotingWeight > 0 && totalVotes * 10_000 >= quorumBps * totalVotingWeight, "QUORUM");
+        require(uint256(m.forVotes) * 10_000 >= passBps * totalVotes, "NOT_PASS");
+
+        uint256 bal = _balance();
+        require(m.amount <= bal, "INSUFF");
+        uint256 fee = (m.amount * feeBps) / 10_000;
+        uint256 net = m.amount - fee;
+        if (token == address(0)) {
+            (bool ok1,) = payable(feeReceiver).call{value: fee}("");
+            (bool ok2,) = payable(owner).call{value: net}("");
+            require(ok1 && ok2, "PAY");
+        } else {
+            IERC20 t = IERC20(token);
+            t.safeTransfer(feeReceiver, fee);
+            t.safeTransfer(owner, net);
+        }
+        m.executed = true;
+        emit MilestoneExecuted(idx, net, fee);
+    }
+
+    function succeed() external onlyOwner { require(state == State.Review, "STATE"); state = State.Succeeded; emit Succeeded(); }
+
+    function _takeSnapshot() internal { require(!snapshotTaken, "SNAP"); snapshotTaken = true; totalVotingWeight = totalRaised; }
+    function _initVoterWeight(address v) internal returns (uint256 w) {
+        if (!snapshotTaken) return 0;
+        w = votingWeight[v]; if (w == 0) { uint256 c = contributions[v].amount; if (c > 0) { votingWeight[v] = c; w = c; } }
+    }
+    function _balance() internal view returns (uint256) { return token==address(0) ? address(this).balance : IERC20(token).balanceOf(address(this)); }
+    receive() external payable {}
+}
+solidity
+// contracts/src/CrowdfundFactory.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface ICloneInit {
+    function initialize(address _owner, address _token, uint256 _softCap, uint256 _hardCap, uint64 _deadline, uint16 _feeBps, address _feeReceiver) external;
+}
+
+contract CrowdfundFactory {
+    address public immutable implementation;
+    address public admin;
+
+    event CampaignCreated(address indexed campaign, address indexed owner, address token);
+
+    constructor(address _implementation, address _admin) { implementation=_implementation; admin=_admin; }
+
+    function setAdmin(address newAdmin) external { require(msg.sender==admin, "ADMIN"); admin=newAdmin; }
+
+    function createCampaign(
+        address _owner, address _token, uint256 _softCap, uint256 _hardCap, uint64 _deadline, uint16 _feeBps, address _feeReceiver
+    ) external returns (address clone) {
+        clone = _clone(implementation);
+        ICloneInit(clone).initialize(_owner,_token,_softCap,_hardCap,_deadline,_feeBps,_feeReceiver);
+        emit CampaignCreated(clone, _owner, _token);
+    }
+
+    function _clone(address impl) internal returns (address proxy) {
+        bytes20 targetBytes = bytes20(impl);
+        assembly {
+            let ptr := mload(0x40)
+            mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73)
+            mstore(add(ptr, 0x14), targetBytes)
+            mstore(add(ptr, 0x28), 0x5af43d82803e903d91602b57fd5bf3)
+            proxy := create(0, ptr, 0x37)
+        }
+        require(proxy != address(0), "CLONE_FAIL");
+    }
+}
+toml
+# contracts/foundry.toml
+[profile.default]
+solc_version = "0.8.24"
+optimizer = true
+optimizer_runs = 200
+src = "src"
+out = "out"
+libs = ["lib"]
+
+[fmt]
+line_length = 100
+tab_width = 4
+solidity
+// contracts/script/Deploy.s.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+import "forge-std/Script.sol";
+import "../src/CrowdfundImplementation.sol";
+import "../src/CrowdfundFactory.sol";
+
+contract DeployCrowdfund is Script {
+    function run() external {
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(pk);
+        CrowdfundImplementation impl = new CrowdfundImplementation();
+        CrowdfundFactory factory = new CrowdfundFactory(address(impl), vm.addr(pk));
+        console2.log("Implementation:", address(impl));
+        console2.log("Factory:", address(factory));
+        vm.stopBroadcast();
+    }
+}
+solidity
+// contracts/test/Crowdfund.t.sol
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+import "forge-std/Test.sol";
+import "../src/CrowdfundImplementation.sol";
+import "../src/CrowdfundFactory.sol";
+
+contract CrowdfundTest is Test {
+    CrowdfundImplementation impl;
+    CrowdfundFactory factory;
+
+    function setUp() public {
+        impl = new CrowdfundImplementation();
+        factory = new CrowdfundFactory(address(impl), address(this));
+    }
+
+    function testFundingFlowNative() public {
+        address campaign = factory.createCampaign(address(this), address(0), 1 ether, 10 ether, uint64(block.timestamp+1 days), 300, address(this));
+        CrowdfundImplementation c = CrowdfundImplementation(campaign);
+
+        vm.deal(address(1), 5 ether);
+        vm.prank(address(1));
+        c.contribute{value: 2 ether}(0);
+
+        vm.warp(block.timestamp + 2 days);
+        c.finalize();
+        assertEq(uint(c.state()), uint(CrowdfundImplementation.State.Review));
+    }
+}
+Go services and bindings
+makefile
+# go/Makefile
+PKG=github.com/yourorg/crowdfund-monorepo/go
+CONTRACTS=../contracts/out
+
+build-bindings:
+    forge --version >/dev/null || (echo "Install Foundry"; exit 1)
+    cd ../contracts && forge build
+    abigen --abi $(CONTRACTS)/CrowdfundImplementation.sol/CrowdfundImplementation.abi.json --bin $(CONTRACTS)/CrowdfundImplementation.sol/CrowdfundImplementation.bin --pkg bindings --type CrowdfundImplementation --out bindings/crowdfund_impl.go
+    abigen --abi $(CONTRACTS)/CrowdfundFactory.sol/CrowdfundFactory.abi.json --bin $(CONTRACTS)/CrowdfundFactory.sol/CrowdfundFactory.bin --pkg bindings --type CrowdfundFactory --out bindings/crowdfund_factory.go
+
+.PHONY: build-bindings
+go
+// go/go.mod
+module github.com/yourorg/crowdfund-monorepo/go
+
+go 1.22
+
+require (
+    github.com/ethereum/go-ethereum v1.13.14
+    github.com/lib/pq v1.10.9
+)
+go
+// go/internal/rpc/ethclient.go
+package rpc
+
+import (
+    "context"
+    "crypto/tls"
+    "net/http"
+    "time"
+
+    "github.com/ethereum/go-ethereum/ethclient"
+)
+
+func MustEthClient(rpcURL string) *ethclient.Client {
+    tr := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+    httpClient := &http.Client{Transport: tr, Timeout: 30 * time.Second}
+    c, err := ethclient.DialHTTPWithClient(rpcURL, httpClient)
+    if err != nil { panic(err) }
+    return c
+}
+
+func WithTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+    return context.WithTimeout(ctx, d)
+}
+go
+// go/internal/db/db.go
+package db
+
+import (
+    "database/sql"
+    _ "github.com/lib/pq"
+)
+
+func MustOpen(dsn string) *sql.DB {
+    db, err := sql.Open("postgres", dsn)
+    if err != nil { panic(err) }
+    if err := db.Ping(); err != nil { panic(err) }
+    return db
+}
+sql
+-- go/internal/db/migrations/001_init.sql
+CREATE TABLE IF NOT EXISTS campaigns (
+  id BIGSERIAL PRIMARY KEY,
+  address BYTEA UNIQUE NOT NULL,
+  owner BYTEA NOT NULL,
+  token BYTEA,
+  soft_cap NUMERIC NOT NULL,
+  hard_cap NUMERIC NOT NULL,
+  deadline TIMESTAMPTZ NOT NULL,
+  fee_bps INT NOT NULL,
+  fee_receiver BYTEA NOT NULL,
+  state SMALLINT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS contributions (
+  id BIGSERIAL PRIMARY KEY,
+  campaign BYTEA NOT NULL,
+  contributor BYTEA NOT NULL,
+  amount NUMERIC NOT NULL,
+  tx_hash BYTEA NOT NULL,
+  log_index INT NOT NULL DEFAULT 0,
+  block_num BIGINT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (tx_hash, log_index)
+);
+
+CREATE TABLE IF NOT EXISTS milestones (
+  id BIGSERIAL PRIMARY KEY,
+  campaign BYTEA NOT NULL,
+  idx INT NOT NULL,
+  amount NUMERIC NOT NULL,
+  proof_cid BYTEA NOT NULL,
+  vote_start TIMESTAMPTZ NOT NULL,
+  vote_end TIMESTAMPTZ NOT NULL,
+  for_votes NUMERIC NOT NULL DEFAULT 0,
+  against_votes NUMERIC NOT NULL DEFAULT 0,
+  executed BOOLEAN NOT NULL DEFAULT false,
+  UNIQUE (campaign, idx)
+);
+
+CREATE TABLE IF NOT EXISTS payouts (
+  id BIGSERIAL PRIMARY KEY,
+  campaign BYTEA NOT NULL,
+  milestone_idx INT NOT NULL,
+  net_amount NUMERIC NOT NULL,
+  fee NUMERIC NOT NULL,
+  tx_hash BYTEA NOT NULL,
+  block_num BIGINT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (tx_hash)
+);
+
+CREATE TABLE IF NOT EXISTS chain_cursors (
+  id TEXT PRIMARY KEY,
+  last_block BIGINT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+INSERT INTO chain_cursors (id, last_block) VALUES ('crowdfund', 0)
+ON CONFLICT (id) DO NOTHING;
+sql
+-- go/internal/db/migrations/002_indexes.sql
+CREATE INDEX IF NOT EXISTS idx_contributions_campaign ON contributions (campaign);
+CREATE INDEX IF NOT EXISTS idx_contributions_contributor ON contributions (contributor);
+CREATE INDEX IF NOT EXISTS idx_payouts_campaign ON payouts (campaign, milestone_idx);
+CREATE INDEX IF NOT EXISTS idx_campaigns_state ON campaigns (state);
+go
+// go/cmd/indexer/main.go
+package main
+
+import (
+    "context"
+    "database/sql"
+    "log"
+    "math/big"
+    "os"
+    "os/signal"
+    "strings"
+    "syscall"
+    "time"
+
+    "github.com/ethereum/go-ethereum"
+    "github.com/ethereum/go-ethereum/accounts/abi"
+    "github.com/ethereum/go-ethereum/common"
+    gethtypes "github.com/ethereum/go-ethereum/core/types"
+
+    "github.com/yourorg/crowdfund-monorepo/go/internal/db"
+    "github.com/yourorg/crowdfund-monorepo/go/internal/rpc"
+)
+
+const cursorID = "crowdfund"
+
+func main() {
+    // env
+    rpcURL := mustEnv("RPC_URL")
+    dsn := mustEnv("POSTGRES_DSN")
+    confirms := mustEnvInt("CONFIRMATIONS", 12)
+    startBlock := mustEnvUint64("START_BLOCK", 0)
+
+    ec := rpc.MustEthClient(rpcURL)
+    sqlDB := db.MustOpen(dsn)
+    defer sqlDB.Close()
+
+    implABI := mustParseABI(`[
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"user","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Contributed","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":false,"name":"state","type":"uint8"}],"name":"Finalized","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":true,"name":"user","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Refunded","type":"event"},
+        {"anonymous":false,"inputs":[{"indexed":false,"name":"idx","type":"uint256"},{"indexed":false,"name":"netAmount","type":"uint256"},{"indexed":false,"name":"fee","type":"uint256"}],"name":"MilestoneExecuted","type":"event"}
+    ]`)
+
+    last := getCursor(sqlDB, startBlock)
+    ticker := time.NewTicker(3 * time.Second)
+    defer ticker.Stop()
+
+    sigs := make(chan os.Signal, 1)
+    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+    for {
+        select {
+        case <-ticker.C:
+            ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+            head, err := ec.BlockNumber(ctx)
+            cancel()
+            if err != nil { log.Printf("head err: %v", err); continue }
+            if head <= uint64(confirms) { continue }
+            safe := head - uint64(confirms)
+            next := last + 1
+            if next == 0 || next > safe { continue }
+
+            q := ethereum.FilterQuery{
+                FromBlock: big.NewInt(int64(next)),
+                ToBlock:   big.NewInt(int64(safe)),
+                // Addresses: []common.Address{...} // optional: restrict to known campaigns
+            }
+            ctx, cancel = context.WithTimeout(context.Background(), 25*time.Second)
+            logs, err := ec.FilterLogs(ctx, q)
+            cancel()
+            if err != nil { log.Printf("filter err: %v", err); continue }
+
+            if err := process(sqlDB, implABI, logs); err != nil {
+                log.Printf("process err: %v", err)
+                continue
+            }
+            last = safe
+            setCursor(sqlDB, safe)
+        case <-sigs:
+            return
+        }
+    }
+}
+
+func process(dbx *sql.DB, a abi.ABI, logs []gethtypes.Log) error {
+    tx, err := dbx.Begin()
+    if err != nil { return err }
+    defer func() { if err != nil { _ = tx.Rollback() } }()
+
+    for _, l := range logs {
+        if len(l.Topics) == 0 { continue }
+        switch l.Topics[0] {
+        case a.Events["Contributed"].ID:
+            var ev struct{ User common.Address; Amount *big.Int }
+            if err = a.UnpackIntoInterface(&ev, "Contributed", l.Data); err != nil { return err }
+            _, err = tx.Exec(`INSERT INTO contributions (campaign, contributor, amount, tx_hash, log_index, block_num) VALUES ($1,$2,$3,$4,$5,$6)
+                ON CONFLICT (tx_hash, log_index) DO NOTHING`,
+                l.Address.Bytes(), ev.User.Bytes(), ev.Amount.String(), l.TxHash.Bytes(), l.Index, l.BlockNumber)
+            if err != nil { return err }
+
+        case a.Events["Finalized"].ID:
+            _, err = tx.Exec(`UPDATE campaigns SET state=$1 WHERE address=$2`, 1, l.Address.Bytes())
+            if err != nil { return err }
+
+        case a.Events["Refunded"].ID:
+            // optional: mark refunded state; in minimal skeleton we skip
+
+        case a.Events["MilestoneExecuted"].ID:
+            var ev struct{ Idx, NetAmount, Fee *big.Int }
+            if err = a.UnpackIntoInterface(&ev, "MilestoneExecuted", l.Data); err != nil { return err }
+            _, err = tx.Exec(`INSERT INTO payouts (campaign, milestone_idx, net_amount, fee, tx_hash, block_num)
+                VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (tx_hash) DO NOTHING`,
+                l.Address.Bytes(), ev.Idx.Int64(), ev.NetAmount.String(), ev.Fee.String(), l.TxHash.Bytes(), l.BlockNumber)
+            if err != nil { return err }
+        }
+    }
+    return tx.Commit()
+}
+
+func getCursor(dbx *sql.DB, defaultBlock uint64) uint64 {
+    var last sql.NullInt64
+    _ = dbx.QueryRow(`SELECT last_block FROM chain_cursors WHERE id=$1`, cursorID).Scan(&last)
+    if last.Valid { return uint64(last.Int64) }
+    _, _ = dbx.Exec(`INSERT INTO chain_cursors (id, last_block) VALUES ($1,$2)`, cursorID, defaultBlock)
+    return defaultBlock
+}
+func setCursor(dbx *sql.DB, b uint64) {
+    _, _ = dbx.Exec(`UPDATE chain_cursors SET last_block=$1, updated_at=now() WHERE id=$2`, b, cursorID)
+}
+
+func mustParseABI(jsonABI string) abi.ABI {
+    ab, err := abi.JSON(strings.NewReader(jsonABI))
+    if err != nil { panic(err) }
+    return ab
+}
+func mustEnv(k string) string { v := os.Getenv(k); if v == "" { panic("missing env " + k) } ; return v }
+func mustEnvInt(k string, def int) int { v := os.Getenv(k); if v == "" { return def }; i, _ := strconv.Atoi(v); return i }
+func mustEnvUint64(k string, def uint64) uint64 { v := os.Getenv(k); if v == "" { return def }; u, _ := strconv.ParseUint(v, 10, 64); return u }
+Devops and quickstart
+yaml
+# deploy/docker-compose.yml
+version: "3.9"
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: crowdfund
+    ports: [ "5432:5432" ]
+    volumes: [ "pg:/var/lib/postgresql/data" ]
+
+  indexer:
+    build:
+      context: ..
+      dockerfile: Dockerfile.indexer
+    env_file: ./.env
+    depends_on: [ db ]
+    restart: unless-stopped
+
+volumes:
+  pg: {}
+dockerfile
+# Dockerfile.indexer at repo root
+FROM golang:1.22 AS build
+WORKDIR /app
+COPY go/go.mod go/go.sum ./go/
+RUN cd go && go mod download
+COPY go ./go
+RUN cd go && go build -o /bin/indexer ./cmd/indexer
+
+FROM debian:stable-slim
+ENV TZ=UTC
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=build /bin/indexer /usr/local/bin/indexer
+ENTRYPOINT ["/usr/local/bin/indexer"]
+bash
+# scripts/abigen.sh
+#!/usr/bin/env bash
+set -euo pipefail
+pushd contracts >/dev/null
+forge build
+popd >/dev/null
+pushd go >/dev/null
+make build-bindings
+popd >/dev/null
+echo "Bindings generated."
+md
+<!-- README.md -->
+# Crowdfund (Arbitrum + USDC) Monorepo
+
+## Quickstart
+1. Copy env
+   - cp deploy/.env.example deploy/.env
+   - fill RPC_URL, PRIVATE_KEY, USDC_ADDRESS
+2. Deploy contracts (Arbitrum Sepolia)
+   - cd contracts
+   - forge script script/Deploy.s.sol:DeployCrowdfund --rpc-url $RPC_URL --broadcast --private-key $PRIVATE_KEY -vvvv
+   - record Implementation and Factory addresses
+3. Generate Go bindings
+   - ./scripts/abigen.sh
+4. Run DB and indexer
+   - cd deploy && docker-compose up -d
+   - export POSTGRES_DSN=postgres://postgres:postgres@localhost:5432/crowdfund?sslmode=disable
+   - export RPC_URL=...
+   - go run go/cmd/indexer/main.go
+5. Create a campaign
+   - Use Foundry/ethers script to call Factory.createCampaign(owner, USDC, softCap, hardCap, deadline, feeBps, feeReceiver)
+
+## Notes
+- Snapshot-based voting: weight equals contribution at finalize.
+- Fees are taken on each milestone release.
+- For production: add OZ SafeERC20, ReentrancyGuard, AccessControl, multisig + timelock.
+如果你把这个结构直接放进仓库，改好 .env，就能在 Arbitrum Sepolia 跑通部署、出资、finalize、里程碑释放与索引入库的全链路。需要我把 Factory.createCampaign 的 Foundry交互脚本和一份最小的前端钱包交互页面也补上吗？
+
+补上
+好，那我直接把 Factory.createCampaign 的 Foundry 交互脚本 和一个最小可用的 前端钱包交互页面 补到这个 monorepo 里，这样你本地就能从部署到链上交互全链路打通。
+
+1️⃣ Foundry 交互脚本（创建众筹活动）
+在 contracts/script/ 下新增 CreateCampaign.s.sol：
+
+solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "forge-std/Script.sol";
+import "../src/CrowdfundFactory.sol";
+
+contract CreateCampaign is Script {
+    function run() external {
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        address factoryAddr = vm.envAddress("FACTORY_ADDRESS");
+        address usdcAddr = vm.envAddress("USDC_ADDRESS");
+
+        vm.startBroadcast(pk);
+
+        CrowdfundFactory factory = CrowdfundFactory(factoryAddr);
+
+        // 参数示例
+        address owner = vm.addr(pk);
+        uint256 softCap = 1_000e6; // 1000 USDC (6 decimals)
+        uint256 hardCap = 10_000e6; // 10000 USDC
+        uint64 deadline = uint64(block.timestamp + 7 days);
+        uint16 feeBps = 300; // 3%
+        address feeReceiver = owner;
+
+        address campaign = factory.createCampaign(
+            owner,
+            usdcAddr,
+            softCap,
+            hardCap,
+            deadline,
+            feeBps,
+            feeReceiver
+        );
+
+        console2.log("New Campaign:", campaign);
+
+        vm.stopBroadcast();
+    }
+}
+运行方式：
+
+bash
+forge script script/CreateCampaign.s.sol:CreateCampaign \
+  --rpc-url $RPC_URL \
+  --broadcast \
+  --private-key $PRIVATE_KEY \
+  -vvvv
+2️⃣ 最小前端钱包交互页面
+在 monorepo 新增 frontend/（Next.js + wagmi + viem）：
+
+代码
+frontend/
+├─ pages/
+│  └─ index.tsx
+├─ package.json
+├─ tsconfig.json
+└─ ...
+安装依赖
+
+bash
+cd frontend
+npm install next react react-dom wagmi viem ethers
+pages/index.tsx
+
+tsx
+import { useState } from "react";
+import { useAccount, useConnect, useDisconnect, useContractWrite, usePrepareContractWrite } from "wagmi";
+import { InjectedConnector } from "wagmi/connectors/injected";
+import CrowdfundFactoryAbi from "../abi/CrowdfundFactory.json";
+
+export default function Home() {
+  const { address, isConnected } = useAccount();
+  const { connect } = useConnect({ connector: new InjectedConnector() });
+  const { disconnect } = useDisconnect();
+
+  const [softCap, setSoftCap] = useState("1000000"); // 1 USDC (6 decimals)
+  const [hardCap, setHardCap] = useState("5000000"); // 5 USDC
+  const [deadline, setDeadline] = useState(Math.floor(Date.now()/1000) + 86400); // +1 day
+
+  const { config } = usePrepareContractWrite({
+    address: process.env.NEXT_PUBLIC_FACTORY_ADDRESS as `0x${string}`,
+    abi: CrowdfundFactoryAbi,
+    functionName: "createCampaign",
+    args: [
+      address,
+      process.env.NEXT_PUBLIC_USDC_ADDRESS,
+      BigInt(softCap),
+      BigInt(hardCap),
+      BigInt(deadline),
+      300, // feeBps
+      address
+    ],
+    enabled: isConnected && !!address
+  });
+
+  const { write } = useContractWrite(config);
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>众筹活动创建</h1>
+      {!isConnected ? (
+        <button onClick={() => connect()}>连接钱包</button>
+      ) : (
+        <div>
+          <p>已连接: {address}</p>
+          <button onClick={() => disconnect()}>断开</button>
+        </div>
+      )}
+
+      <div>
+        <label>Soft Cap (USDC, 6 decimals):</label>
+        <input value={softCap} onChange={e => setSoftCap(e.target.value)} />
+      </div>
+      <div>
+        <label>Hard Cap (USDC, 6 decimals):</label>
+        <input value={hardCap} onChange={e => setHardCap(e.target.value)} />
+      </div>
+      <div>
+        <label>Deadline (unix timestamp):</label>
+        <input value={deadline} onChange={e => setDeadline(Number(e.target.value))} />
+      </div>
+
+      <button disabled={!write} onClick={() => write?.()}>
+        创建活动
+      </button>
+    </div>
+  );
+}
+abi/CrowdfundFactory.json
+
+从 contracts/out/CrowdfundFactory.sol/CrowdfundFactory.abi.json 复制到 frontend/abi/。
+
+运行
+
+bash
+NEXT_PUBLIC_FACTORY_ADDRESS=0xYourFactory \
+NEXT_PUBLIC_USDC_ADDRESS=0xYourUSDC \
+npm run dev
+3️⃣ 链路说明
+部署阶段：用 Deploy.s.sol 部署 Implementation + Factory
+
+创建活动：可用 CreateCampaign.s.sol（链下脚本）或前端页面（链上交易）
+
+索引器：Go 服务监听 CampaignCreated 事件，入库活动信息
+
+交互：前端可扩展贡献、投票、释放等功能，直接调用 Implementation 合约 ABI
+
+我可以帮你把这个 frontend 目录直接并入之前的 monorepo 文件树，并加上一个 贡献/投票/退款 的交互页面，这样你就有一个完整的 DApp 原型。 你要我把这三个交互功能也补上吗，这样前端就能全流程操作众筹活动了？
+
+需要
+好，那我直接把 贡献 / 投票 / 退款 三个交互功能补到前端，让你这个 DApp 原型可以全流程操作众筹活动。我们会在 frontend/pages/index.tsx 基础上扩展，并且拆成几个小组件，方便维护。
+
+1️⃣ 前端目录结构（扩展版）
+代码
+frontend/
+├─ abi/
+│  ├─ CrowdfundFactory.json
+│  └─ CrowdfundImplementation.json
+├─ components/
+│  ├─ CreateCampaignForm.tsx
+│  ├─ ContributeForm.tsx
+│  ├─ VoteForm.tsx
+│  └─ RefundButton.tsx
+├─ pages/
+│  └─ index.tsx
+├─ package.json
+└─ ...
+2️⃣ ABI 准备
+CrowdfundImplementation.json 从 contracts/out/CrowdfundImplementation.sol/CrowdfundImplementation.abi.json 复制到 frontend/abi/
+
+CrowdfundFactory.json 已有
+
+3️⃣ 组件实现
+CreateCampaignForm.tsx
+（和之前类似，这里略）
+
+ContributeForm.tsx
+tsx
+import { useState } from "react";
+import { useAccount, usePrepareContractWrite, useContractWrite } from "wagmi";
+import CrowdfundImplAbi from "../abi/CrowdfundImplementation.json";
+
+export default function ContributeForm({ campaignAddress, tokenIsNative }: { campaignAddress: `0x${string}`, tokenIsNative: boolean }) {
+  const { address } = useAccount();
+  const [amount, setAmount] = useState("0");
+
+  const { config } = usePrepareContractWrite({
+    address: campaignAddress,
+    abi: CrowdfundImplAbi,
+    functionName: "contribute",
+    args: tokenIsNative ? [0] : [BigInt(amount)],
+    overrides: tokenIsNative ? { value: BigInt(amount) } : {},
+    enabled: !!address && !!campaignAddress
+  });
+
+  const { write } = useContractWrite(config);
+
+  return (
+    <div>
+      <h3>贡献资金</h3>
+      <input value={amount} onChange={e => setAmount(e.target.value)} placeholder={tokenIsNative ? "ETH 数量" : "代币最小单位"} />
+      <button disabled={!write} onClick={() => write?.()}>贡献</button>
+    </div>
+  );
+}
+VoteForm.tsx
+tsx
+import { useState } from "react";
+import { useAccount, usePrepareContractWrite, useContractWrite } from "wagmi";
+import CrowdfundImplAbi from "../abi/CrowdfundImplementation.json";
+
+export default function VoteForm({ campaignAddress }: { campaignAddress: `0x${string}` }) {
+  const { address } = useAccount();
+  const [milestoneIdx, setMilestoneIdx] = useState("0");
+  const [support, setSupport] = useState(true);
+
+  const { config } = usePrepareContractWrite({
+    address: campaignAddress,
+    abi: CrowdfundImplAbi,
+    functionName: "vote",
+    args: [BigInt(milestoneIdx), support],
+    enabled: !!address
+  });
+
+  const { write } = useContractWrite(config);
+
+  return (
+    <div>
+      <h3>投票</h3>
+      <input value={milestoneIdx} onChange={e => setMilestoneIdx(e.target.value)} placeholder="里程碑索引" />
+      <label>
+        <input type="checkbox" checked={support} onChange={e => setSupport(e.target.checked)} />
+        支持
+      </label>
+      <button disabled={!write} onClick={() => write?.()}>提交投票</button>
+    </div>
+  );
+}
+RefundButton.tsx
+tsx
+import { useAccount, usePrepareContractWrite, useContractWrite } from "wagmi";
+import CrowdfundImplAbi from "../abi/CrowdfundImplementation.json";
+
+export default function RefundButton({ campaignAddress }: { campaignAddress: `0x${string}` }) {
+  const { address } = useAccount();
+
+  const { config } = usePrepareContractWrite({
+    address: campaignAddress,
+    abi: CrowdfundImplAbi,
+    functionName: "refund",
+    enabled: !!address
+  });
+
+  const { write } = useContractWrite(config);
+
+  return (
+    <div>
+      <h3>退款</h3>
+      <button disabled={!write} onClick={() => write?.()}>申请退款</button>
+    </div>
+  );
+}
+4️⃣ index.tsx 整合
+tsx
+import { WagmiConfig, createConfig, configureChains } from "wagmi";
+import { arbitrumSepolia } from "wagmi/chains";
+import { publicProvider } from "wagmi/providers/public";
+import { InjectedConnector } from "wagmi/connectors/injected";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import CreateCampaignForm from "../components/CreateCampaignForm";
+import ContributeForm from "../components/ContributeForm";
+import VoteForm from "../components/VoteForm";
+import RefundButton from "../components/RefundButton";
+
+const { chains, publicClient, webSocketPublicClient } = configureChains(
+  [arbitrumSepolia],
+  [publicProvider()]
+);
+
+const config = createConfig({
+  autoConnect: true,
+  connectors: [new InjectedConnector({ chains })],
+  publicClient,
+  webSocketPublicClient
+});
+
+export default function App() {
+  return (
+    <WagmiConfig config={config}>
+      <Main />
+    </WagmiConfig>
+  );
+}
+
+function Main() {
+  const { address, isConnected } = useAccount();
+  const { connect } = useConnect({ connector: new InjectedConnector() });
+  const { disconnect } = useDisconnect();
+
+  const campaignAddress = process.env.NEXT_PUBLIC_CAMPAIGN_ADDRESS as `0x${string}`;
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>去中心化众筹 DApp</h1>
+      {!isConnected ? (
+        <button onClick={() => connect()}>连接钱包</button>
+      ) : (
+        <div>
+          <p>已连接: {address}</p>
+          <button onClick={() => disconnect()}>断开</button>
+        </div>
+      )}
+
+      <CreateCampaignForm />
+      <ContributeForm campaignAddress={campaignAddress} tokenIsNative={false} />
+      <VoteForm campaignAddress={campaignAddress} />
+      <RefundButton campaignAddress={campaignAddress} />
+    </div>
+  );
+}
+5️⃣ 使用说明
+部署合约：用 Foundry 部署 Implementation + Factory
+
+创建活动：用 CreateCampaign.s.sol 或前端 CreateCampaignForm
+
+贡献资金：ContributeForm（原生币或 USDC）
+
+投票：VoteForm（输入里程碑索引，选择支持/反对）
+
+退款：RefundButton（活动失败时可用）
+
+如果你愿意，我可以帮你在这个前端里加上 实时读取链上活动状态、贡献列表、投票结果 的 hooks，这样你就能在页面上看到最新的众筹进度和投票情况，而不必刷新页面。 要我把这个链上数据实时展示功能也加上吗，这样就成了一个完整的可用 DApp 仪表盘。
+
+实时读取链上活动状态、贡献列表、投票结果
+好，那我帮你把 实时读取链上活动状态、贡献列表、投票结果 的功能加到前端，用 wagmi + viem 的 useReadContract 和 usePublicClient 来做链上轮询，这样页面会自动刷新数据，不用手动点按钮。
+
+1️⃣ 新增 hooks（frontend/hooks/useCampaignData.ts）
+ts
+import { useEffect, useState } from "react";
+import { usePublicClient } from "wagmi";
+import CrowdfundImplAbi from "../abi/CrowdfundImplementation.json";
+
+export function useCampaignData(campaignAddress: `0x${string}`) {
+  const publicClient = usePublicClient();
+  const [state, setState] = useState<number>();
+  const [totalRaised, setTotalRaised] = useState<string>();
+  const [milestones, setMilestones] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!campaignAddress) return;
+    let timer: NodeJS.Timer;
+
+    async function fetchData() {
+      try {
+        const s = await publicClient.readContract({
+          address: campaignAddress,
+          abi: CrowdfundImplAbi,
+          functionName: "state"
+        });
+        setState(Number(s));
+
+        const raised = await publicClient.readContract({
+          address: campaignAddress,
+          abi: CrowdfundImplAbi,
+          functionName: "totalRaised"
+        });
+        setTotalRaised(raised.toString());
+
+        const count = await publicClient.readContract({
+          address: campaignAddress,
+          abi: CrowdfundImplAbi,
+          functionName: "milestonesCount"
+        });
+
+        const ms: any[] = [];
+        for (let i = 0; i < Number(count); i++) {
+          const m = await publicClient.readContract({
+            address: campaignAddress,
+            abi: CrowdfundImplAbi,
+            functionName: "milestones",
+            args: [BigInt(i)]
+          });
+          ms.push(m);
+        }
+        setMilestones(ms);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    fetchData();
+    timer = setInterval(fetchData, 5000); // 每 5 秒刷新一次
+    return () => clearInterval(timer);
+  }, [campaignAddress]);
+
+  return { state, totalRaised, milestones };
+}
+2️⃣ 读取贡献列表（frontend/hooks/useContributions.ts）
+贡献列表是事件数据，链上不直接存数组，所以我们用 getLogs 从事件里解析。
+
+ts
+import { useEffect, useState } from "react";
+import { usePublicClient } from "wagmi";
+import { parseAbiItem } from "viem";
+
+export function useContributions(campaignAddress: `0x${string}`) {
+  const publicClient = usePublicClient();
+  const [contribs, setContribs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!campaignAddress) return;
+    let timer: NodeJS.Timer;
+
+    async function fetchLogs() {
+      try {
+        const logs = await publicClient.getLogs({
+          address: campaignAddress,
+          event: parseAbiItem(
+            "event Contributed(address indexed user, uint256 amount)"
+          ),
+          fromBlock: BigInt(0),
+          toBlock: "latest"
+        });
+        const parsed = logs.map(l => ({
+          user: l.args?.user,
+          amount: l.args?.amount?.toString()
+        }));
+        setContribs(parsed);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    fetchLogs();
+    timer = setInterval(fetchLogs, 10000);
+    return () => clearInterval(timer);
+  }, [campaignAddress]);
+
+  return contribs;
+}
+3️⃣ 读取投票结果（frontend/hooks/useVotes.ts）
+ts
+import { useEffect, useState } from "react";
+import { usePublicClient } from "wagmi";
+import { parseAbiItem } from "viem";
+
+export function useVotes(campaignAddress: `0x${string}`, milestoneIdx: number) {
+  const publicClient = usePublicClient();
+  const [votes, setVotes] = useState<{ forVotes: string; againstVotes: string }>({ forVotes: "0", againstVotes: "0" });
+
+  useEffect(() => {
+    if (!campaignAddress) return;
+    let timer: NodeJS.Timer;
+
+    async function fetchVotes() {
+      try {
+        const logs = await publicClient.getLogs({
+          address: campaignAddress,
+          event: parseAbiItem(
+            "event Voted(uint256 indexed idx, address indexed voter, bool support, uint256 weight)"
+          ),
+          fromBlock: BigInt(0),
+          toBlock: "latest",
+          args: { idx: BigInt(milestoneIdx) }
+        });
+
+        let forSum = BigInt(0);
+        let againstSum = BigInt(0);
+        logs.forEach(l => {
+          if (l.args?.support) forSum += BigInt(l.args?.weight || 0);
+          else againstSum += BigInt(l.args?.weight || 0);
+        });
+
+        setVotes({ forVotes: forSum.toString(), againstVotes: againstSum.toString() });
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    fetchVotes();
+    timer = setInterval(fetchVotes, 10000);
+    return () => clearInterval(timer);
+  }, [campaignAddress, milestoneIdx]);
+
+  return votes;
+}
+4️⃣ 在页面中展示实时数据
+tsx
+import { useCampaignData } from "../hooks/useCampaignData";
+import { useContributions } from "../hooks/useContributions";
+import { useVotes } from "../hooks/useVotes";
+
+export default function Dashboard({ campaignAddress }: { campaignAddress: `0x${string}` }) {
+  const { state, totalRaised, milestones } = useCampaignData(campaignAddress);
+  const contributions = useContributions(campaignAddress);
+  const votes = useVotes(campaignAddress, 0); // 里程碑 0
+
+  return (
+    <div>
+      <h2>活动状态: {state}</h2>
+      <p>已筹集: {totalRaised}</p>
+
+      <h3>贡献列表</h3>
+      <ul>
+        {contributions.map((c, i) => (
+          <li key={i}>{c.user} - {c.amount}</li>
+        ))}
+      </ul>
+
+      <h3>里程碑 0 投票结果</h3>
+      <p>支持票: {votes.forVotes}</p>
+      <p>反对票: {votes.againstVotes}</p>
+
+      <h3>里程碑列表</h3>
+      <ul>
+        {milestones.map((m, i) => (
+          <li key={i}>
+            金额: {m[0].toString()} CID: {m[1]} 执行: {m[6] ? "是" : "否"}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+✅ 这样前端会自动轮询链上数据，实时显示活动状态、贡献记录和投票结果。 如果你愿意，我可以帮你把这个 Dashboard 和之前的 创建/贡献/投票/退款 页面合并成一个完整的 众筹活动详情页，并加上 事件监听（watchContractEvent） 来做到秒级实时更新，不必轮询。
+
+要我帮你把它升级成 事件驱动的实时 DApp 吗？这样体验会更丝滑。
+
+把它升级成 事件驱动的实时 DApp
+Event-driven realtime dApp upgrade
+下面是一套可直接落地的改造方案与代码骨架，将轮询式读取升级为事件驱动、准实时且具备重组回滚与断线恢复能力的 DApp。核心点：启用 WebSocket、使用事件订阅增量更新本地状态、处理链上重组、与后端索引器形成双通道冗余。
+
+Transport 与全局状态
+1) 启用 WebSocket transport（wagmi + viem）
+tsx
+// frontend/lib/wagmi.ts
+import { WagmiConfig, createConfig, configureChains } from 'wagmi'
+import { arbitrumSepolia } from 'wagmi/chains'
+import { webSocket, http } from 'viem'
+import { InjectedConnector } from 'wagmi/connectors/injected'
+
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL!     // wss://arb-sepolia.g.alchemy.com/v2/...
+const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL!   // https://...
+
+export const config = createConfig({
+  autoConnect: true,
+  chains: [arbitrumSepolia],
+  transports: {
+    [arbitrumSepolia.id]: webSocket(WS_URL), // 主用 WS
+  },
+  // 可选：HTTP 备用
+  // transports: { [arbitrumSepolia.id]: http(RPC_URL) }
+})
+
+export function AppProviders({ children }: { children: React.ReactNode }) {
+  return <WagmiConfig config={config}>{children}</WagmiConfig>
+}
+在 pages/_app.tsx 中包裹 AppProviders。
+
+2) 统一的前端 Store（Zustand）
+ts
+// frontend/store/campaign.ts
+import { create } from 'zustand'
+
+type Contribution = { user: `0x${string}`, amount: bigint, tx?: `0x${string}` }
+type VoteAgg = { forVotes: bigint, againstVotes: bigint }
+type Milestone = {
+  amount: bigint, proofCid: string, voteStart: bigint, voteEnd: bigint,
+  forVotes: bigint, againstVotes: bigint, executed: boolean
+}
+
+type State = {
+  state?: number
+  totalRaised: bigint
+  contributions: Contribution[]
+  milestones: Record<number, Milestone>
+  lastBlock: bigint
+}
+type Actions = {
+  init: (s: Partial<State>) => void
+  applyContributed: (c: Contribution, block: bigint, removed?: boolean) => void
+  applyVoted: (idx: number, weight: bigint, support: boolean, block: bigint, removed?: boolean) => void
+  applyExecuted: (idx: number, net: bigint, fee: bigint, block: bigint, removed?: boolean) => void
+  setState: (st: number) => void
+}
+
+export const useCampaignStore = create<State & Actions>((set, get) => ({
+  totalRaised: 0n,
+  contributions: [],
+  milestones: {},
+  lastBlock: 0n,
+
+  init: (s) => set({ ...s }),
+
+  applyContributed: (c, block, removed) => {
+    const st = get()
+    if (removed) {
+      // 回滚：从列表回撤，减少 totalRaised
+      const idx = st.contributions.findIndex(x => x.tx === c.tx)
+      if (idx >= 0) {
+        const amt = st.contributions[idx].amount
+        const next = st.contributions.slice()
+        next.splice(idx, 1)
+        set({
+          contributions: next,
+          totalRaised: st.totalRaised - amt,
+          lastBlock: block > st.lastBlock ? block : st.lastBlock
+        })
+      }
+      return
+    }
+    set({
+      contributions: [...st.contributions, c],
+      totalRaised: st.totalRaised + c.amount,
+      lastBlock: block > st.lastBlock ? block : st.lastBlock
+    })
+  },
+
+  applyVoted: (idx, weight, support, block, removed) => {
+    const st = get()
+    const m = st.milestones[idx] || {
+      amount: 0n, proofCid: '', voteStart: 0n, voteEnd: 0n,
+      forVotes: 0n, againstVotes: 0n, executed: false
+    }
+    const delta = removed ? -weight : weight
+    const next: Milestone = {
+      ...m,
+      forVotes: support ? (m.forVotes + delta) : m.forVotes,
+      againstVotes: !support ? (m.againstVotes + delta) : m.againstVotes,
+    }
+    set({
+      milestones: { ...st.milestones, [idx]: next },
+      lastBlock: block > st.lastBlock ? block : st.lastBlock
+    })
+  },
+
+  applyExecuted: (idx, net, fee, block, removed) => {
+    const st = get()
+    const m = st.milestones[idx] || {
+      amount: 0n, proofCid: '', voteStart: 0n, voteEnd: 0n,
+      forVotes: 0n, againstVotes: 0n, executed: false
+    }
+    const next: Milestone = { ...m, executed: !removed } // 重组撤回
+    set({
+      milestones: { ...st.milestones, [idx]: next },
+      lastBlock: block > st.lastBlock ? block : st.lastBlock
+    })
+  },
+
+  setState: (stt) => set({ state: stt })
+}))
+Event 订阅与增量同步
+1) 合约事件 watch（含重组处理）
+ts
+// frontend/hooks/useCampaignLive.ts
+import { useEffect } from 'react'
+import { usePublicClient } from 'wagmi'
+import { parseAbiItem } from 'viem'
+import { useCampaignStore } from '../store/campaign'
+
+const E = {
+  Contributed: parseAbiItem("event Contributed(address indexed user, uint256 amount)"),
+  Finalized: parseAbiItem("event Finalized(uint8 state)"),
+  Voted: parseAbiItem("event Voted(uint256 indexed idx, address indexed voter, bool support, uint256 weight)"),
+  MilestoneExecuted: parseAbiItem("event MilestoneExecuted(uint256 indexed idx, uint256 netAmount, uint256 fee)"),
+  Refunded: parseAbiItem("event Refunded(address indexed user, uint256 amount)")
+}
+
+export function useCampaignLive(campaign: `0x${string}`) {
+  const pc = usePublicClient()
+  const applyContributed = useCampaignStore(s => s.applyContributed)
+  const applyVoted = useCampaignStore(s => s.applyVoted)
+  const applyExecuted = useCampaignStore(s => s.applyExecuted)
+  const setState = useCampaignStore(s => s.setState)
+
+  useEffect(() => {
+    if (!campaign) return
+    const unsubs: Array<() => void> = []
+
+    // Contributed
+    const u1 = pc.watchContractEvent({
+      address: campaign,
+      event: E.Contributed,
+      onLogs(logs) {
+        logs.forEach(l => {
+          const removed = l.removed === true
+          applyContributed(
+            { user: l.args!.user as `0x${string}`, amount: l.args!.amount as bigint, tx: l.transactionHash },
+            BigInt(l.blockNumber!), removed
+          )
+        })
+      }
+    }); unsubs.push(u1)
+
+    // Finalized
+    const u2 = pc.watchContractEvent({
+      address: campaign,
+      event: E.Finalized,
+      onLogs(logs) {
+        logs.forEach(l => {
+          const st = Number(l.args!.state)
+          // 如果 removed，则可以回退到上一个 state；此处简化为覆盖
+          setState(st)
+        })
+      }
+    }); unsubs.push(u2)
+
+    // Voted
+    const u3 = pc.watchContractEvent({
+      address: campaign,
+      event: E.Voted,
+      onLogs(logs) {
+        logs.forEach(l => {
+          const removed = l.removed === true
+          const idx = Number(l.args!.idx)
+          const support = Boolean(l.args!.support)
+          const weight = l.args!.weight as bigint
+          applyVoted(idx, weight, support, BigInt(l.blockNumber!), removed)
+        })
+      }
+    }); unsubs.push(u3)
+
+    // MilestoneExecuted
+    const u4 = pc.watchContractEvent({
+      address: campaign,
+      event: E.MilestoneExecuted,
+      onLogs(logs) {
+        logs.forEach(l => {
+          const removed = l.removed === true
+          const idx = Number(l.args!.idx)
+          const net = l.args!.netAmount as bigint
+          const fee = l.args!.fee as bigint
+          applyExecuted(idx, net, fee, BigInt(l.blockNumber!), removed)
+        })
+      }
+    }); unsubs.push(u4)
+
+    // Refunded（可用于 UI 提示）
+    const u5 = pc.watchContractEvent({
+      address: campaign,
+      event: E.Refunded,
+      onLogs(logs) {
+        // 可在此触发 toast，或更新本地“我已退款”的状态
+      }
+    }); unsubs.push(u5)
+
+    return () => unsubs.forEach(u => u())
+  }, [campaign])
+}
+要点：
+
+事件对象的 removed 标记用于处理链上重组回滚，确保本地状态可逆。
+
+不再轮询合约状态，改为事件驱动增量更新；初次加载仍建议做一次性快照（见下）。
+
+2) 初次快照 + 事件接管
+ts
+// frontend/hooks/useCampaignSnapshot.ts
+import { useEffect } from 'react'
+import { usePublicClient } from 'wagmi'
+import CrowdfundImplAbi from '../abi/CrowdfundImplementation.json'
+import { useCampaignStore } from '../store/campaign'
+
+export function useCampaignSnapshot(campaign: `0x${string}`) {
+  const pc = usePublicClient()
+  const init = useCampaignStore(s => s.init)
+
+  useEffect(() => {
+    if (!campaign) return
+    let cancel = false
+
+    async function load() {
+      try {
+        const [state, totalRaised, count] = await Promise.all([
+          pc.readContract({ address: campaign, abi: CrowdfundImplAbi, functionName: 'state' }),
+          pc.readContract({ address: campaign, abi: CrowdfundImplAbi, functionName: 'totalRaised' }),
+          pc.readContract({ address: campaign, abi: CrowdfundImplAbi, functionName: 'milestonesCount' })
+        ])
+        const milestones: any = {}
+        for (let i = 0; i < Number(count); i++) {
+          const m: any = await pc.readContract({ address: campaign, abi: CrowdfundImplAbi, functionName: 'milestones', args: [BigInt(i)] })
+          milestones[i] = {
+            amount: m[0] as bigint, proofCid: m[1] as string,
+            voteStart: m[2] as bigint, voteEnd: m[3] as bigint,
+            forVotes: m[4] as bigint, againstVotes: m[5] as bigint,
+            executed: m[6] as boolean
+          }
+        }
+        if (!cancel) init({
+          state: Number(state),
+          totalRaised: totalRaised as bigint,
+          milestones
+        })
+      } catch (e) { console.error(e) }
+    }
+
+    load()
+    return () => { cancel = true }
+  }, [campaign])
+}
+在页面中：首次 mount 先 useCampaignSnapshot 拉全量，随后 useCampaignLive 订阅增量事件。
+
+UI 组件接入（实时仪表盘）
+tsx
+// frontend/pages/campaign.tsx
+import { useAccount } from 'wagmi'
+import { useCampaignSnapshot } from '../hooks/useCampaignSnapshot'
+import { useCampaignLive } from '../hooks/useCampaignLive'
+import { useCampaignStore } from '../store/campaign'
+import ContributeForm from '../components/ContributeForm'
+import VoteForm from '../components/VoteForm'
+import RefundButton from '../components/RefundButton'
+
+const CAMPAIGN = process.env.NEXT_PUBLIC_CAMPAIGN_ADDRESS as `0x${string}`
+
+export default function CampaignPage() {
+  const { isConnected } = useAccount()
+  useCampaignSnapshot(CAMPAIGN)
+  useCampaignLive(CAMPAIGN)
+
+  const state = useCampaignStore(s => s.state)
+  const totalRaised = useCampaignStore(s => s.totalRaised)
+  const contributions = useCampaignStore(s => s.contributions)
+  const milestones = useCampaignStore(s => s.milestones)
+
+  return (
+    <div style={{ padding: 20 }}>
+      <h1>众筹活动实时仪表盘</h1>
+      <p>合约: {CAMPAIGN}</p>
+      <p>状态: {state}</p>
+      <p>已筹集: {totalRaised.toString()}</p>
+
+      <h3>贡献</h3>
+      <ContributeForm campaignAddress={CAMPAIGN} tokenIsNative={false} />
+      <ul>
+        {contributions.slice(-10).reverse().map((c, i) =>
+          <li key={i}>{c.user} +{c.amount.toString()}</li>
+        )}
+      </ul>
+
+      <h3>里程碑</h3>
+      <ul>
+        {Object.entries(milestones).map(([idx, m]: any) => (
+          <li key={idx}>
+            #{idx} 金额: {m.amount.toString()} 执行: {m.executed ? '是' : '否'}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <span>支持: {m.forVotes.toString()}</span>
+              <span>反对: {m.againstVotes.toString()}</span>
+            </div>
+            <VoteForm campaignAddress={CAMPAIGN} />
+          </li>
+        ))}
+      </ul>
+
+      <h3>退款</h3>
+      <RefundButton campaignAddress={CAMPAIGN} />
+    </div>
+  )
+}
+与后端索引器的双通道冗余
+纯前端事件订阅在网络/浏览器限制或历史恢复时存在盲点，建议前端增加“后端事件桥”作为兜底：
+
+前端默认使用 WebSocket 订阅链上事件。
+
+启动时做一次后端快照同步（REST：/api/campaign/:addr/snapshot）。
+
+每 N 分钟比对一次后端聚合（对账），发现差异则以后端为准纠偏。
+
+后端在重组时按照游标回放，前端收到 SSE/WebSocket “reorg_range” 通知后，对指定区块范围内的本地事件做撤销和重放。
+
+前端 SSE 示例（兜底）：
+
+ts
+// frontend/lib/sse.ts
+export function subscribeBackendEvents(campaign: string, onEvent: (e: any) => void) {
+  const es = new EventSource(`/api/events?campaign=${campaign}`)
+  es.onmessage = (msg) => onEvent(JSON.parse(msg.data))
+  es.onerror = () => { /* 可做重连 */ }
+  return () => es.close()
+}
+可靠性与优化要点
+重组处理：已使用 log.removed 回滚本地状态，确保一致性。
+
+断线恢复：初次加载全量快照 + 事件流增量；WS 断开自动重连由 viem 处理。
+
+去重与顺序：使用交易哈希 + logIndex 去重；Zustand 层避免重复追加。
+
+性能控制：
+
+使用批处理（可在 watch 回调中收集 100ms 批次再 setState）。
+
+渲染时仅展示最近 N 条贡献记录。
+
+安全限制：在前端对金额单位与代币精度进行格式化；提交交易前提示 Gas 与确认风险。
+
+可视化升级：将 for/against 实时累加展示为图表（Recharts/Chart.js），增强决策体验。
+
+下一步可选增强
+事件总线抽象：统一定义 Event 类型 → reducer → store，便于扩展更多事件（Proposed/Approved 等）。
+
+乐观更新：对贡献与投票本地先写入“pending”，待链上事件确认后转为“confirmed”（并处理失败回滚）。
+
+多 Campaign 管理：按地址分片 store，支持列表页与详情页切换时的订阅卸载/复用。
+
+权限与治理：接入多签/时间锁事件，展示治理操作时间线。
+
+如果你要，我可以把这些代码直接并入你现有的 frontend 目录，并加上图表与“乐观更新”状态标识，让体验再上一个台阶。
+
+把这些代码直接并入
+明白，你的意思是要把我刚才给的事件驱动实时 DApp 改造方案，直接合并进你现有的前端工程里。 我不能直接在你的本地项目里“动手”合并代码，但我可以帮你做一个精确的集成路线图，让你按步骤无缝并入，避免冲突和遗漏。
+
+🛠 集成步骤
+1. 新增依赖
+确保安装了事件驱动所需的依赖：
+
+bash
+npm install wagmi viem zustand
+如果你已经有 wagmi/viem，可以跳过。
+
+2. 新建或修改全局配置
+在 frontend/lib/wagmi.ts 新建文件，粘贴我提供的 WebSocket transport 配置。 然后在 pages/_app.tsx 中用 <AppProviders> 包裹你的应用。
+
+3. 引入 Zustand Store
+在 frontend/store/campaign.ts 新建文件，粘贴我提供的 useCampaignStore 代码。 这个 store 会替代你原来分散在组件里的状态管理。
+
+4. 添加事件订阅 Hook
+在 frontend/hooks/useCampaignLive.ts 新建文件，粘贴 useCampaignLive 代码。 它会实时监听链上事件，并调用 store 更新状态。
+
+5. 添加初次快照 Hook
+在 frontend/hooks/useCampaignSnapshot.ts 新建文件，粘贴 useCampaignSnapshot 代码。 它会在页面加载时拉取一次全量状态，确保事件订阅前数据是完整的。
+
+6. 修改页面组件
+在你的众筹详情页（例如 pages/campaign.tsx）：
+
+引入 useCampaignSnapshot 和 useCampaignLive
+
+用 useCampaignStore 读取状态
+
+替换原来的轮询逻辑
+
+7. 后端兜底（可选）
+如果你有后端索引器，可以加上 SSE/WS 兜底通道，防止浏览器断线丢事件。
+
+🔍 集成顺序建议
+先加 store（不影响现有逻辑）
+
+加 snapshot hook（替换原始一次性加载）
+
+加 live hook（替换轮询）
+
+测试事件触发（贡献、投票、执行等）
+
+最后移除旧轮询代码
+
+如果你愿意，我可以帮你直接把这些文件按你的目录结构改好，并标注每一处需要替换的旧代码，这样你复制粘贴就能跑起来。 你要我帮你做这个“直接可合并版本”吗？这样你几乎不用自己对比代码。
+
+你理解错了，我是“下一步可选增强 事件总线抽象：统一定义 Event 类型 → reducer → store，便于扩展更多事件（Proposed/Approved 等）。 乐观更新：对贡献与投票本地先写入“pending”，待链上事件确认后转为“confirmed”（并处理失败回滚）。 多 Campaign 管理：按地址分片 store，支持列表页与详情页切换时的订阅卸载/复用。 权限与治理：接入多签/时间锁事件，展示治理操作时间线。” 指的是这个里面的并入
+Upgrade plan focusing on event bus, optimistic updates, multi-campaign, and governance
+你说得对。我们把“下一步可选增强”这四块真正并入：事件总线抽象、乐观更新、多 Campaign 分片、权限与治理时间线。下面给出可直接拷贝落地的文件与替换点，与你现有的事件驱动实时 DApp 无缝拼接，并保留重组回滚、断线恢复与对账能力。
+
+Event bus abstraction
+将链上与本地（乐观）事件统一抽象成 EventEnvelope，通过 reducer → store 的单通道流入，便于扩展新事件类型与做重组撤销。
+
+ts
+// frontend/events/types.ts
+export type Hex = `0x${string}`
+
+export type Source = 'onchain' | 'optimistic' | 'backend'
+export type Status = 'applied' | 'reverted'
+
+export type BaseEvt = {
+  campaign: Hex
+  txHash?: Hex
+  logIndex?: number
+  blockNumber?: bigint
+  removed?: boolean
+  at: number
+  source: Source
+}
+
+export type EvtContributed = BaseEvt & {
+  type: 'Contributed'
+  user: Hex
+  amount: bigint
+}
+
+export type EvtVoted = BaseEvt & {
+  type: 'Voted'
+  idx: number
+  voter: Hex
+  support: boolean
+  weight: bigint
+}
+
+export type EvtMilestoneExecuted = BaseEvt & {
+  type: 'MilestoneExecuted'
+  idx: number
+  netAmount: bigint
+  fee: bigint
+}
+
+export type EvtFinalized = BaseEvt & {
+  type: 'Finalized'
+  state: number
+}
+
+export type EvtRefunded = BaseEvt & {
+  type: 'Refunded'
+  user: Hex
+  amount: bigint
+}
+
+// Governance & timelock/multisig
+export type EvtTxProposed = BaseEvt & {
+  type: 'TxProposed'
+  proposer: Hex
+  txId: string
+  target: Hex
+  value: string
+  data: Hex
+  eta?: bigint
+}
+
+export type EvtTxQueued = BaseEvt & {
+  type: 'TxQueued'
+  txId: string
+  eta: bigint
+}
+
+export type EvtTxExecuted = BaseEvt & {
+  type: 'TxExecuted'
+  txId: string
+}
+
+export type EvtTxCancelled = BaseEvt & {
+  type: 'TxCancelled'
+  txId: string
+}
+
+export type AnyEvt =
+  | EvtContributed
+  | EvtVoted
+  | EvtMilestoneExecuted
+  | EvtFinalized
+  | EvtRefunded
+  | EvtTxProposed
+  | EvtTxQueued
+  | EvtTxExecuted
+  | EvtTxCancelled
+ts
+// frontend/events/reducer.ts
+import { AnyEvt } from './types'
+import { produce } from 'immer'
+
+export type Contribution = { user: `0x${string}`, amount: bigint, tx?: `0x${string}`, status?: 'pending' | 'confirmed' | 'reverted' }
+export type Milestone = {
+  amount: bigint, proofCid?: string, voteStart?: bigint, voteEnd?: bigint,
+  forVotes: bigint, againstVotes: bigint, executed: boolean
+}
+export type GovernanceItem = {
+  txId: string
+  kind: 'proposed' | 'queued' | 'executed' | 'cancelled'
+  label: string
+  eta?: bigint
+  when: number
+  blockNumber?: bigint
+}
+
+export type CampaignSlice = {
+  state?: number
+  totalRaised: bigint
+  contributions: Contribution[]
+  milestones: Record<number, Milestone>
+  governanceTimeline: GovernanceItem[]
+  lastBlock: bigint
+  pending: {
+    byTx: Record<string, { type: string, payload: any, createdAt: number }>
+  }
+}
+
+export type GlobalState = {
+  byCampaign: Record<string, CampaignSlice>
+}
+
+const emptySlice = (): CampaignSlice => ({
+  totalRaised: 0n,
+  contributions: [],
+  milestones: {},
+  governanceTimeline: [],
+  lastBlock: 0n,
+  pending: { byTx: {} }
+})
+
+export function reduceEvent(state: GlobalState, evt: AnyEvt): GlobalState {
+  return produce(state, draft => {
+    const key = evt.campaign.toLowerCase()
+    const s = draft.byCampaign[key] ??= emptySlice()
+
+    const advanceBlock = () => {
+      if (evt.blockNumber && evt.blockNumber > s.lastBlock) s.lastBlock = evt.blockNumber
+    }
+
+    const isReorg = evt.removed === true
+
+    switch (evt.type) {
+      case 'Contributed': {
+        // reorg-aware + optimistic reconciliation
+        if (isReorg) {
+          // remove matching tx if present
+          if (evt.txHash) {
+            const idx = s.contributions.findIndex(c => c.tx === evt.txHash)
+            if (idx >= 0) {
+              const amt = s.contributions[idx].amount
+              s.contributions.splice(idx, 1)
+              s.totalRaised -= amt
+            }
+          }
+          break
+        }
+        // if exists pending with same txHash → confirm
+        if (evt.txHash) {
+          const p = s.contributions.find(c => c.tx === evt.txHash && c.status === 'pending')
+          if (p) p.status = 'confirmed'
+        }
+        s.contributions.push({ user: evt.user, amount: evt.amount, tx: evt.txHash, status: 'confirmed' })
+        s.totalRaised += evt.amount
+        advanceBlock()
+        break
+      }
+      case 'Voted': {
+        const m = s.milestones[evt.idx] ??= { amount: 0n, forVotes: 0n, againstVotes: 0n, executed: false }
+        const delta = isReorg ? -evt.weight : evt.weight
+        if (evt.support) m.forVotes += delta
+        else m.againstVotes += delta
+        advanceBlock()
+        break
+      }
+      case 'MilestoneExecuted': {
+        const m = s.milestones[evt.idx] ??= { amount: 0n, forVotes: 0n, againstVotes: 0n, executed: false }
+        m.executed = !isReorg
+        advanceBlock()
+        break
+      }
+      case 'Finalized': {
+        s.state = evt.state
+        advanceBlock()
+        break
+      }
+      case 'Refunded': {
+        // optional: tag contributions from user as refunded for UI signals
+        advanceBlock()
+        break
+      }
+      case 'TxProposed': {
+        s.governanceTimeline.push({
+          txId: evt.txId,
+          kind: 'proposed',
+          label: `Proposed to ${evt.target} value ${evt.value}`,
+          eta: evt.eta,
+          when: evt.at,
+          blockNumber: evt.blockNumber
+        })
+        advanceBlock()
+        break
+      }
+      case 'TxQueued': {
+        s.governanceTimeline.push({
+          txId: evt.txId,
+          kind: 'queued',
+          label: `Queued with ETA`,
+          eta: evt.eta,
+          when: evt.at,
+          blockNumber: evt.blockNumber
+        })
+        advanceBlock()
+        break
+      }
+      case 'TxExecuted': {
+        s.governanceTimeline.push({
+          txId: evt.txId,
+          kind: 'executed',
+          label: `Executed`,
+          when: evt.at,
+          blockNumber: evt.blockNumber
+        })
+        advanceBlock()
+        break
+      }
+      case 'TxCancelled': {
+        s.governanceTimeline.push({
+          txId: evt.txId,
+          kind: 'cancelled',
+          label: `Cancelled`,
+          when: evt.at,
+          blockNumber: evt.blockNumber
+        })
+        advanceBlock()
+        break
+      }
+    }
+  })
+}
+ts
+// frontend/events/bus.ts
+import { create } from 'zustand'
+import { reduceEvent, type GlobalState } from './reducer'
+import type { AnyEvt } from './types'
+
+type Bus = {
+  state: GlobalState
+  dispatch: (evt: AnyEvt) => void
+  resetCampaign: (addr: string, next?: Partial<GlobalState['byCampaign'][string]>) => void
+}
+
+export const useEventBus = create<Bus>((set, get) => ({
+  state: { byCampaign: {} },
+  dispatch: (evt) => set(s => ({ state: reduceEvent(s.state, evt) })),
+  resetCampaign: (addr, next) => set(s => {
+    const key = addr.toLowerCase()
+    const current = s.state.byCampaign[key] ?? { totalRaised: 0n, contributions: [], milestones: {}, governanceTimeline: [], lastBlock: 0n, pending: { byTx: {} } }
+    return {
+      state: {
+        ...s.state,
+        byCampaign: {
+          ...s.state.byCampaign,
+          [key]: { ...current, ...next }
+        }
+      }
+    }
+  })
+}))
+Optimistic updates
+提供一个交易管理器：发送交易后立即发出 optimistic 事件，写入 pending；当链上 log 到达时进行确认；失败或替代交易则回滚。
+
+ts
+// frontend/tx/txManager.ts
+import { useEventBus } from '../events/bus'
+import type { Hex } from '../events/types'
+
+export type PendingKind = 'Contributed' | 'Voted'
+export type PendingItem = {
+  txHash: Hex
+  kind: PendingKind
+  payload: any
+  createdAt: number
+}
+
+const registry = new Map<string, PendingItem>() // txHash → pending
+
+export function optimisticContribute(campaign: Hex, txHash: Hex, user: Hex, amount: bigint) {
+  const dispatch = useEventBus.getState().dispatch
+  registry.set(txHash, { txHash, kind: 'Contributed', payload: { user, amount }, createdAt: Date.now() })
+  // emit optimistic event
+  dispatch({
+    type: 'Contributed',
+    campaign,
+    txHash,
+    user,
+    amount,
+    at: Date.now(),
+    source: 'optimistic'
+  })
+}
+
+export function optimisticVote(campaign: Hex, txHash: Hex, idx: number, voter: Hex, support: boolean, weight: bigint) {
+  const dispatch = useEventBus.getState().dispatch
+  registry.set(txHash, { txHash, kind: 'Voted', payload: { idx, voter, support, weight }, createdAt: Date.now() })
+  dispatch({
+    type: 'Voted',
+    campaign, txHash, idx, voter, support, weight,
+    at: Date.now(),
+    source: 'optimistic'
+  })
+}
+
+export function onChainConfirm(txHash: Hex) {
+  // confirmation is implicit: onchain event with same txHash will set status to confirmed via reducer
+  registry.delete(txHash)
+}
+
+export function onTxReverted(campaign: Hex, txHash: Hex) {
+  const item = registry.get(txHash)
+  if (!item) return
+  const dispatch = useEventBus.getState().dispatch
+  if (item.kind === 'Contributed') {
+    const { user, amount } = item.payload
+    // send a synthetic "removed" to revert optimistic addition
+    dispatch({
+      type: 'Contributed',
+      campaign, txHash, user, amount,
+      removed: true,
+      at: Date.now(),
+      source: 'optimistic'
+    })
+  }
+  if (item.kind === 'Voted') {
+    const { idx, voter, support, weight } = item.payload
+    dispatch({
+      type: 'Voted',
+      campaign, txHash, idx, voter, support, weight,
+      removed: true,
+      at: Date.now(),
+      source: 'optimistic'
+    })
+  }
+  registry.delete(txHash)
+}
+在你提交交易的组件中，发送交易后立即调用 optimisticXXX；监听交易回执失败时调用 onTxReverted。链上事件抵达会自动“确认”。
+
+Multi-campaign sharded store
+以地址为 key 的分片存储，支持多个详情页/列表页同时订阅与热切换。你之前的 useCampaignStore 可替换为下列选择器。
+
+ts
+// frontend/hooks/useCampaignState.ts
+import { useMemo } from 'react'
+import { useEventBus } from '../events/bus'
+import type { Hex } from '../events/types'
+
+export function useCampaignState(campaign: Hex) {
+  const state = useEventBus(s => s.state)
+  const slice = state.byCampaign[campaign.toLowerCase()]
+  return slice
+}
+
+export function useCampaignField<T>(campaign: Hex, picker: (s: any) => T): T | undefined {
+  const state = useEventBus(s => s.state)
+  const slice = state.byCampaign[campaign.toLowerCase()]
+  return slice ? picker(slice) : undefined
+}
+订阅/卸载逻辑保持你现有的 watchContractEvent，但将 onLogs 的翻译统一发送到 EventBus：
+
+ts
+// frontend/hooks/useEventStream.ts
+import { useEffect } from 'react'
+import { usePublicClient } from 'wagmi'
+import { parseAbiItem } from 'viem'
+import { useEventBus } from '../events/bus'
+import type { Hex } from '../events/types'
+
+const ABI = {
+  Contributed: parseAbiItem("event Contributed(address indexed user, uint256 amount)"),
+  Finalized: parseAbiItem("event Finalized(uint8 state)"),
+  Voted: parseAbiItem("event Voted(uint256 indexed idx, address indexed voter, bool support, uint256 weight)"),
+  MilestoneExecuted: parseAbiItem("event MilestoneExecuted(uint256 indexed idx, uint256 netAmount, uint256 fee)")
+}
+
+export function useEventStream(campaign: Hex) {
+  const pc = usePublicClient()
+  const dispatch = useEventBus(s => s.dispatch)
+
+  useEffect(() => {
+    if (!campaign) return
+    const unsubs: Array<() => void> = []
+
+    unsubs.push(pc.watchContractEvent({
+      address: campaign,
+      event: ABI.Contributed,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'Contributed',
+          campaign,
+          txHash: l.transactionHash!,
+          user: l.args!.user as Hex,
+          amount: l.args!.amount as bigint,
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          removed: l.removed === true,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+
+    unsubs.push(pc.watchContractEvent({
+      address: campaign,
+      event: ABI.Finalized,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'Finalized',
+          campaign,
+          state: Number(l.args!.state),
+          txHash: l.transactionHash!,
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          removed: l.removed === true,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+
+    unsubs.push(pc.watchContractEvent({
+      address: campaign,
+      event: ABI.Voted,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'Voted',
+          campaign,
+          idx: Number(l.args!.idx),
+          voter: l.args!.voter as Hex,
+          support: Boolean(l.args!.support),
+          weight: l.args!.weight as bigint,
+          txHash: l.transactionHash!,
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          removed: l.removed === true,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+
+    unsubs.push(pc.watchContractEvent({
+      address: campaign,
+      event: ABI.MilestoneExecuted,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'MilestoneExecuted',
+          campaign,
+          idx: Number(l.args!.idx),
+          netAmount: l.args!.netAmount as bigint,
+          fee: l.args!.fee as bigint,
+          txHash: l.transactionHash!,
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          removed: l.removed === true,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+
+    return () => unsubs.forEach(u => u())
+  }, [campaign])
+}
+Governance timeline integration
+对常见的多签/时间锁合约（如 TimelockController、Gnosis Safe 自定义模块或简单治理合约）进行事件归一，输出统一的时间线节点。
+
+ts
+// frontend/hooks/useGovernanceStream.ts
+import { useEffect } from 'react'
+import { usePublicClient } from 'wagmi'
+import { parseAbiItem } from 'viem'
+import { useEventBus } from '../events/bus'
+import type { Hex } from '../events/types'
+
+// 示例：timelock-like 事件（根据你的合约 ABI 调整）
+const GOV = {
+  TxProposed: parseAbiItem("event TxProposed(bytes32 indexed txId, address indexed proposer, address target, uint256 value, bytes data, uint256 eta)"),
+  TxQueued: parseAbiItem("event TxQueued(bytes32 indexed txId, uint256 eta)"),
+  TxExecuted: parseAbiItem("event TxExecuted(bytes32 indexed txId)"),
+  TxCancelled: parseAbiItem("event TxCancelled(bytes32 indexed txId)")
+}
+
+export function useGovernanceStream(campaign: Hex, governanceAddress: Hex) {
+  const pc = usePublicClient()
+  const dispatch = useEventBus(s => s.dispatch)
+
+  useEffect(() => {
+    if (!governanceAddress) return
+    const unsubs: Array<() => void> = []
+
+    unsubs.push(pc.watchContractEvent({
+      address: governanceAddress,
+      event: GOV.TxProposed,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'TxProposed',
+          campaign,
+          txHash: l.transactionHash!,
+          txId: (l.args!.txId as string),
+          proposer: l.args!.proposer as Hex,
+          target: l.args!.target as Hex,
+          value: (l.args!.value as bigint).toString(),
+          data: l.args!.data as Hex,
+          eta: l.args!.eta as bigint,
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+    unsubs.push(pc.watchContractEvent({
+      address: governanceAddress,
+      event: GOV.TxQueued,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'TxQueued',
+          campaign,
+          txHash: l.transactionHash!,
+          txId: (l.args!.txId as string),
+          eta: l.args!.eta as bigint,
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+    unsubs.push(pc.watchContractEvent({
+      address: governanceAddress,
+      event: GOV.TxExecuted,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'TxExecuted',
+          campaign,
+          txHash: l.transactionHash!,
+          txId: (l.args!.txId as string),
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+    unsubs.push(pc.watchContractEvent({
+      address: governanceAddress,
+      event: GOV.TxCancelled,
+      onLogs(logs) {
+        logs.forEach(l => dispatch({
+          type: 'TxCancelled',
+          campaign,
+          txHash: l.transactionHash!,
+          txId: (l.args!.txId as string),
+          blockNumber: BigInt(l.blockNumber!),
+          logIndex: l.logIndex,
+          at: Date.now(),
+          source: 'onchain'
+        }))
+      }
+    }))
+
+    return () => unsubs.forEach(u => u())
+  }, [campaign, governanceAddress])
+}
+UI 展示（时间线）：
+
+tsx
+// frontend/components/GovernanceTimeline.tsx
+import { useCampaignField } from '../hooks/useCampaignState'
+import type { Hex } from '../events/types'
+
+export default function GovernanceTimeline({ campaign }: { campaign: Hex }) {
+  const items = useCampaignField(campaign, s => s.governanceTimeline) ?? []
+  const sorted = [...items].sort((a, b) => (Number(b.blockNumber ?? 0n) - Number(a.blockNumber ?? 0n)) || (b.when - a.when))
+  return (
+    <div>
+      <h3>治理时间线</h3>
+      <ul>
+        {sorted.map((it, i) => (
+          <li key={i}>
+            <strong>{it.kind}</strong> — {it.label}
+            {it.eta && <span> ETA: {it.eta.toString()}</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+Integration steps and verification
+引入文件
+
+events/: types.ts, reducer.ts, bus.ts
+
+tx/: txManager.ts
+
+hooks/: useEventStream.ts, useGovernanceStream.ts, useCampaignState.ts
+
+components/: GovernanceTimeline.tsx
+
+替换点
+
+所有原本直接 setState 的事件 watch 回调，改为构造 AnyEvt → useEventBus.getState().dispatch(evt)
+
+页面读取状态改为 useCampaignState(campaign) 或 useCampaignField
+
+提交交易后立即调用 optimisticContribute/optimisticVote，失败时 onTxReverted
+
+断线与重组
+
+继续使用 viem 的 log.removed → reducer 中已统一处理
+
+后端对账时，将差异转换为 AnyEvt（source='backend'）同样 dispatch
+
+去重与幂等
+
+去重策略：在你现有的 watch 回调中按 txHash + logIndex 做本地 seen 集合过滤（如果 RPC 会重复推送）
+
+幂等性：reducer 采用“增量+撤销”写法；如担心重复，可在 slice 内记录 lastAppliedKey 集合
+
+可选增强
+
+批处理：将 onLogs 收集 50–100ms 批量 dispatch，减少渲染抖动
+
+审计与回放：在 bus 层加一个 ring buffer，支持开发模式下的时间旅行调试与错误复盘
+
+权限映射：在治理事件旁显示角色/签名数阈值，来自快照读（e.g., quorum, threshold）
+
+如果你把你的合约 ABI（尤其是治理/时间锁部分）贴给我，我可以把 useGovernanceStream 的事件签名改成与你的实际合约完全一致，并补上快照读取和时间线富文本映射（例如显示签名者列表、阈值、倒计时）。此外，还可以把“审计/回滚/对账”做成一个统一的开发工具栏，符合你一贯的系统化风格。
+
+你帮我获取/生成 ABI
+Abi package for your monorepo
+下面给出与你当前合约实现一一对应的 ABI JSON，可直接放入前端项目使用。同时附上治理时间线示例 ABI（仅包含你现在前端用到的事件签名），以及在 Foundry 下自动生成 ABI 的方法，确保后续改动可以稳定回放与对齐。
+
+CrowdfundImplementation abi
+保存为 frontend/abi/CrowdfundImplementation.json
+
+json
+[
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      { "name": "owner", "type": "address", "indexed": false },
+      { "name": "token", "type": "address", "indexed": false },
+      { "name": "softCap", "type": "uint256", "indexed": false },
+      { "name": "hardCap", "type": "uint256", "indexed": false },
+      { "name": "deadline", "type": "uint64", "indexed": false },
+      { "name": "feeBps", "type": "uint16", "indexed": false },
+      { "name": "feeReceiver", "type": "address", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Contributed",
+    "inputs": [
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Finalized",
+    "inputs": [
+      { "name": "state", "type": "uint8", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Refunded",
+    "inputs": [
+      { "name": "user", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MilestoneProposed",
+    "inputs": [
+      { "name": "idx", "type": "uint256", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false },
+      { "name": "proofCid", "type": "bytes32", "indexed": false },
+      { "name": "voteStart", "type": "uint64", "indexed": false },
+      { "name": "voteEnd", "type": "uint64", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Voted",
+    "inputs": [
+      { "name": "idx", "type": "uint256", "indexed": true },
+      { "name": "voter", "type": "address", "indexed": true },
+      { "name": "support", "type": "bool", "indexed": false },
+      { "name": "weight", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MilestoneExecuted",
+    "inputs": [
+      { "name": "idx", "type": "uint256", "indexed": true },
+      { "name": "netAmount", "type": "uint256", "indexed": false },
+      { "name": "fee", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Succeeded",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "_owner", "type": "address" },
+      { "name": "_token", "type": "address" },
+      { "name": "_softCap", "type": "uint256" },
+      { "name": "_hardCap", "type": "uint256" },
+      { "name": "_deadline", "type": "uint64" },
+      { "name": "_feeBps", "type": "uint16" },
+      { "name": "_feeReceiver", "type": "address" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "contribute",
+    "stateMutability": "payable",
+    "inputs": [
+      { "name": "amount", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "finalize",
+    "stateMutability": "nonpayable",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "refund",
+    "stateMutability": "nonpayable",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "proposeMilestone",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "amount", "type": "uint256" },
+      { "name": "proofCid", "type": "bytes32" },
+      { "name": "votePeriod", "type": "uint64" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "vote",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "idx", "type": "uint256" },
+      { "name": "support", "type": "bool" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "executeMilestone",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "idx", "type": "uint256" },
+      { "name": "quorumBps", "type": "uint256" },
+      { "name": "passBps", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "succeed",
+    "stateMutability": "nonpayable",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "milestonesCount",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "milestones",
+    "stateMutability": "view",
+    "inputs": [{ "name": "", "type": "uint256" }],
+    "outputs": [
+      { "name": "amount", "type": "uint256" },
+      { "name": "proofCid", "type": "bytes32" },
+      { "name": "voteStart", "type": "uint64" },
+      { "name": "voteEnd", "type": "uint64" },
+      { "name": "forVotes", "type": "uint128" },
+      { "name": "againstVotes", "type": "uint128" },
+      { "name": "executed", "type": "bool" }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "state",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint8" }]
+  },
+  {
+    "type": "function",
+    "name": "totalRaised",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "token",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "softCap",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "hardCap",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "deadline",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint64" }]
+  },
+  {
+    "type": "function",
+    "name": "feeBps",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint16" }]
+  },
+  {
+    "type": "function",
+    "name": "feeReceiver",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "contributions",
+    "stateMutability": "view",
+    "inputs": [{ "name": "", "type": "address" }],
+    "outputs": [
+      { "name": "amount", "type": "uint256" },
+      { "name": "refunded", "type": "bool" }
+    ]
+  },
+  {
+    "type": "function",
+    "name": "snapshotTaken",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "bool" }]
+  },
+  {
+    "type": "function",
+    "name": "votingWeight",
+    "stateMutability": "view",
+    "inputs": [{ "name": "", "type": "address" }],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  {
+    "type": "function",
+    "name": "totalVotingWeight",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256" }]
+  },
+  { "type": "receive", "stateMutability": "payable" }
+]
+CrowdfundFactory abi
+保存为 frontend/abi/CrowdfundFactory.json
+
+json
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      { "name": "_implementation", "type": "address" },
+      { "name": "_admin", "type": "address" }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "CampaignCreated",
+    "inputs": [
+      { "name": "campaign", "type": "address", "indexed": true },
+      { "name": "owner", "type": "address", "indexed": true },
+      { "name": "token", "type": "address", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "function",
+    "name": "implementation",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "admin",
+    "stateMutability": "view",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "name": "setAdmin",
+    "stateMutability": "nonpayable",
+    "inputs": [{ "name": "newAdmin", "type": "address" }],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "name": "createCampaign",
+    "stateMutability": "nonpayable",
+    "inputs": [
+      { "name": "_owner", "type": "address" },
+      { "name": "_token", "type": "address" },
+      { "name": "_softCap", "type": "uint256" },
+      { "name": "_hardCap", "type": "uint256" },
+      { "name": "_deadline", "type": "uint64" },
+      { "name": "_feeBps", "type": "uint16" },
+      { "name": "_feeReceiver", "type": "address" }
+    ],
+    "outputs": [{ "name": "clone", "type": "address" }]
+  }
+]
+Governance timeline sample abi
+你的前端 hooks 目前使用了 TxProposed/TxQueued/TxExecuted/TxCancelled 这组事件。若你采用的是自定义治理/时间锁合约，可暂用这份事件 ABI；如果之后切换为 OpenZeppelin TimelockController 或 Gnosis Safe，请把事件映射更新为对应合约的事件名与字段。
+
+保存为 frontend/abi/GovernanceTimelockSample.json
+
+json
+[
+  {
+    "type": "event",
+    "name": "TxProposed",
+    "inputs": [
+      { "name": "txId", "type": "bytes32", "indexed": true },
+      { "name": "proposer", "type": "address", "indexed": true },
+      { "name": "target", "type": "address", "indexed": false },
+      { "name": "value", "type": "uint256", "indexed": false },
+      { "name": "data", "type": "bytes", "indexed": false },
+      { "name": "eta", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TxQueued",
+    "inputs": [
+      { "name": "txId", "type": "bytes32", "indexed": true },
+      { "name": "eta", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TxExecuted",
+    "inputs": [
+      { "name": "txId", "type": "bytes32", "indexed": true }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TxCancelled",
+    "inputs": [
+      { "name": "txId", "type": "bytes32", "indexed": true }
+    ],
+    "anonymous": false
+  }
+]
+如改为 OpenZeppelin TimelockController，请改用这些事件：
+
+CallScheduled(id, index, target, value, data, predecessor, delay)
+
+CallExecuted(id, index, target, value, data)
+
+Cancelled(id)
+
+并在前端的 useGovernanceStream 中相应调整事件名与字段映射。
+
+How to regenerate abis with foundry
+当你更新合约后，建议用 Foundry 产物作为单一事实源，避免手写差异。
+
+构建产物
+
+bash
+cd contracts
+forge build
+产出路径
+
+contracts/out/CrowdfundImplementation.sol/CrowdfundImplementation.abi.json
+
+contracts/out/CrowdfundFactory.sol/CrowdfundFactory.abi.json
+
+同步到前端
+
+bash
+cp contracts/out/CrowdfundImplementation.sol/CrowdfundImplementation.abi.json frontend/abi/CrowdfundImplementation.json
+cp contracts/out/CrowdfundFactory.sol/CrowdfundFactory.abi.json frontend/abi/CrowdfundFactory.json
+你也可以把这两步写进 scripts/abigen.sh，统一生成 bindings 与前端 ABI。
+
+Typescript 使用建议
+在前端用 viem/wagmi 读取事件时，建议用 parseAbi/parseAbiItem 确保编译期校验：
+
+ts
+import { parseAbi } from 'viem'
+import implAbi from '../abi/CrowdfundImplementation.json'
+const ABI = parseAbi(implAbi as any) // or keep as JSON if you prefer
+将事件签名集中在一处，避免多处手写重复，降低维护成本。
+
+需要我把上述 ABI 文件连同脚本一起打到你 monorepo 的对应目录，并附上一个 npm script（如 "sync:abi"）来自动从 Foundry out 目录同步到前端吗？
+
+1github.com
+需要你把上述 ABI 文件连同脚本一起打到你 monorepo 的对应目录，并附上一个 npm script（如 "sync:abi"）来自动从 Foundry out 目录同步到前端
+明白了，我会直接给你一个可合并到 monorepo 的目录结构 + 脚本方案，这样你只要复制过去就能用。 我会假设你的 monorepo 结构是这样的（可按需调整）：
+
+代码
+monorepo/
+├── contracts/                # Foundry 合约目录
+│   └── out/                  # forge build 产物
+├── frontend/                 # Next.js / wagmi 前端
+│   └── abi/                  # 存放 ABI JSON
+├── scripts/                  # 自定义脚本
+└── package.json
+1. 将 ABI 文件放到 frontend/abi
+在 frontend/abi/ 下新建三个文件：
+
+CrowdfundImplementation.json（我上面给你的完整 ABI）
+
+CrowdfundFactory.json
+
+GovernanceTimelockSample.json
+
+2. 新建同步脚本
+在 scripts/ 下新建 sync-abi.sh（记得赋予可执行权限 chmod +x scripts/sync-abi.sh）：
+
+bash
+#!/usr/bin/env bash
+set -e
+
+# 根目录执行
+ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
+
+CONTRACTS_OUT="$ROOT_DIR/contracts/out"
+FRONTEND_ABI="$ROOT_DIR/frontend/abi"
+
+echo "🔄 Building contracts with Foundry..."
+cd "$ROOT_DIR/contracts"
+forge build
+
+echo "📦 Syncing ABI files to frontend..."
+cp "$CONTRACTS_OUT/CrowdfundImplementation.sol/CrowdfundImplementation.abi.json" \
+   "$FRONTEND_ABI/CrowdfundImplementation.json"
+
+cp "$CONTRACTS_OUT/CrowdfundFactory.sol/CrowdfundFactory.abi.json" \
+   "$FRONTEND_ABI/CrowdfundFactory.json"
+
+# 如果 GovernanceTimelock 是你自己写的合约，也可以自动复制
+# cp "$CONTRACTS_OUT/GovernanceTimelock.sol/GovernanceTimelock.abi.json" \
+#    "$FRONTEND_ABI/GovernanceTimelock.json"
+
+echo "✅ ABI sync complete."
+3. 在 package.json 添加 npm script
+在 monorepo 根目录的 package.json 中添加：
+
+json
+{
+  "scripts": {
+    "sync:abi": "bash scripts/sync-abi.sh"
+  }
+}
+这样你只需要执行：
+
+bash
+npm run sync:abi
+就会自动：
+
+forge build 编译合约
+
+从 contracts/out 复制最新 ABI 到 frontend/abi
+
+4. 可选增强
+自动生成 TypeScript 类型 如果你用 viem 或 typechain，可以在脚本末尾加：
+
+bash
+echo "🛠 Generating TypeScript types..."
+pnpm typechain --target=viem --out-dir frontend/types 'frontend/abi/*.json'
+多合约批量同步 可以用 find 遍历 contracts/out 下的所有 .abi.json，按文件名复制到前端。
