@@ -3,6 +3,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Go CI](https://github.com/hrbzhq/crowdfunding_z/actions/workflows/go.yml/badge.svg)](https://github.com/hrbzhq/crowdfunding_z/actions)
+[![Release](https://img.shields.io/github/v/release/hrbzhq/crowdfunding_z?label=release)](https://github.com/hrbzhq/crowdfunding_z/releases/latest)
 
 A modern, scalable crowdfunding platform built with Go, featuring user authentication, real-time updates, and blockchain integration for decentralized funding.
 
