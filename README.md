@@ -18,6 +18,8 @@ A modern, scalable crowdfunding platform built with Go, featuring user authentic
 - [Contributing](#contributing)
 - [License](#license)
 - [Contact](#contact)
+- [Code of Conduct](#code-of-conduct)
+- [Security](#security)
 
 ## Features
 
@@ -259,6 +261,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Email**: your.email@example.com
 - **GitHub**: [@yourusername](https://github.com/yourusername)
 - **LinkedIn**: [Your LinkedIn](https://linkedin.com/in/yourprofile)
+
+## Code of Conduct
+
+Please read our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before contributing.
+
+## Security
+
+If you discover a security vulnerability, please report it privately via the contact email in [SECURITY.md](SECURITY.md).
 
 ### Community
 - **Discord**: [Join our Discord](https://discord.gg/crowdfundingz)
