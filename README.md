@@ -150,6 +150,17 @@ The global crowdfunding market is experiencing rapid growth, with projections re
 - Port: 8080 (configurable)
 - JWT Secret: Configurable via environment variables
 
+### JWT secret
+
+The application reads the `JWT_SECRET` environment variable at startup. If not set, a default (insecure) secret will be used and a warning will be logged. For CI and production, set `JWT_SECRET` to a long random value.
+
+Example (PowerShell):
+
+```powershell
+$env:JWT_SECRET = "a-very-secret-value"
+go run main.go
+```
+
 ## API Documentation
 
 ### Authentication Endpoints
@@ -278,3 +289,40 @@ If you discover a security vulnerability, please report it privately via the con
 ---
 
 **CrowdfundingZ** - Democratizing funding through technology and transparency.
+
+## GitHub SSH 推送指南
+
+本项目支持通过 SSH 推送代码到 GitHub，以下是配置流程：
+
+### 1. 生成 SSH 密钥
+```
+ssh-keygen -t ed25519 -C "hrbzhq@163.com" -f ~/.ssh/id_ed25519 -N ""
+```
+
+### 2. 添加公钥到 GitHub
+复制并执行：
+```
+cat ~/.ssh/id_ed25519.pub
+```
+然后访问 GitHub → Settings → SSH and GPG keys → New SSH key，把复制的公钥粘贴进去并保存。
+
+### 3. 测试连接
+```
+ssh -T git@github.com
+```
+
+### 4. 设置远程仓库地址并推送
+```
+git remote set-url origin git@github.com:hrbzhq/crowdfunding_z.git
+git add .
+git commit -m "Add init script and SSH guide"
+git push origin master
+```
+
+### 一键初始化脚本（可选）
+仓库根含 `init_git.sh`，运行它会生成 SSH key、显示公钥并尝试初始化/推送仓库：
+```
+bash init_git.sh
+```
+
+注意：在 CI/生产环境请使用更安全的密钥管理方式，勿在公共场合暴露私钥。
