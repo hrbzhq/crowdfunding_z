@@ -36,7 +36,12 @@ func CreateProject(c *gin.Context) {
 		Deadline:    req.Deadline,
 		Raised:      0,
 	}
-
+	// If user_id is available in context (from AuthMiddleware), set it
+	if uid, exists := c.Get("user_id"); exists {
+		if u, ok := uid.(uint); ok {
+			project.UserID = u
+		}
+	}
 	if err := database.DB.Create(&project).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create project"})
 		return
@@ -53,9 +58,10 @@ func FundProject(c *gin.Context) {
 		return
 	}
 
+	// Only amount is required in the request body. The user ID is taken from the
+	// auth middleware (JWT) which sets "user_id" in the context.
 	var req struct {
 		Amount float64 `json:"amount" binding:"required"`
-		UserID uint    `json:"user_id" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -72,10 +78,22 @@ func FundProject(c *gin.Context) {
 	project.Raised += req.Amount
 	database.DB.Save(&project)
 
-	// Create funding record
+	// Create funding record: user_id must come from the auth middleware.
+	var uid uint
+	if ctxUID, ok := c.Get("user_id"); ok {
+		if u, ok := ctxUID.(uint); ok {
+			uid = u
+		}
+	}
+	if uid == 0 {
+		// If middleware didn't provide a user id, the request is unauthorized.
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization required"})
+		return
+	}
+
 	funding := models.Funding{
 		ProjectID: uint(projectID),
-		UserID:    req.UserID,
+		UserID:    uid,
 		Amount:    req.Amount,
 	}
 	database.DB.Create(&funding)

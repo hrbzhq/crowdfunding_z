@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"os"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -10,9 +11,16 @@ import (
 
 var DB *gorm.DB
 
+// InitDB initializes the database connection. It respects the DATABASE_URL
+// environment variable. If not set, it falls back to "crowdfunding.db".
 func InitDB() {
 	var err error
-	DB, err = gorm.Open(sqlite.Open("crowdfunding.db"), &gorm.Config{})
+	dbPath := os.Getenv("DATABASE_URL")
+	if dbPath == "" {
+		dbPath = "crowdfunding.db"
+	}
+
+	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
