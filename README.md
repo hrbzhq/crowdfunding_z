@@ -326,3 +326,45 @@ bash init_git.sh
 ```
 
 注意：在 CI/生产环境请使用更安全的密钥管理方式，勿在公共场合暴露私钥。
+
+## GitHub SSH Push Guide (English)
+
+This project supports pushing to GitHub over SSH. Follow the steps below to configure SSH and push the repository using SSH authentication.
+
+### 1. Generate an SSH key
+Run this command (replace the email if needed):
+```bash
+ssh-keygen -t ed25519 -C "hrbzhq@163.com" -f ~/.ssh/id_ed25519 -N ""
+```
+
+### 2. Add the public key to GitHub
+Display and copy your public key:
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+Then go to GitHub → Settings → SSH and GPG keys → New SSH key, paste the public key and save.
+
+### 3. Test the SSH connection
+```bash
+ssh -T git@github.com
+```
+You should see a success message like:
+```
+Hi <username>! You've successfully authenticated, but GitHub does not provide shell access.
+```
+
+### 4. Set the remote URL and push
+```bash
+git remote set-url origin git@github.com:hrbzhq/crowdfunding_z.git
+git add .
+git commit -m "Add init script and SSH guide"
+git push origin master
+```
+
+### One-step init script (optional)
+There is a convenience script `init_git.sh` in the repo root which will generate an SSH key, print the public key, and attempt to initialize/push the repository:
+```bash
+bash init_git.sh
+```
+
+Note: For CI and production use secure key management; never expose your private key publicly.
