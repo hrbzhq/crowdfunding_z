@@ -7,6 +7,8 @@
 
 A modern, scalable crowdfunding platform built with Go, featuring user authentication, real-time updates, and blockchain integration for decentralized funding.
 
+> There is no doubt that in the new era of AI, every person and every endeavor can become the center of the world. Every voice, every hope, deserves to be heard and cared for. Technology is no longer a barrier — it effortlessly serves people. Let the power of a community support a single hope. Start now: everyone can crowdfund.
+
 ## Table of Contents
 
 - [Features](#features)
