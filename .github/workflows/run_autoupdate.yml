@@ -19,6 +19,11 @@ jobs:
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           ENABLE_AUTOUPDATE: 'false'
+          # Optional: set these secrets in the repository settings to allow the
+          # workflow to use the real GitHubUpdater (it will create issues).
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
         run: |
+          echo "Running autoupdater (manual). If GITHUB_TOKEN/GITHUB_REPO are set, real issues may be created."
           go mod tidy
           go run main.go --autoupdate
