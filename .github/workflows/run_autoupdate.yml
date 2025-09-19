@@ -11,6 +11,13 @@ on:
 jobs:
   run-autoupdate:
     runs-on: ubuntu-latest
+    # Minimal permissions: the safe run doesn't need issue write access.
+    # When creating issues, grant `issues: write` at the job level or rely on `secrets.GITHUB_TOKEN`.
+    # If your workflow needs a PAT with broader permissions, store it in repository secrets and provide
+    # it as `secrets.GITHUB_TOKEN` (or a dedicated `AUTODATE_PAT`). Prefer least-privilege PATs.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
