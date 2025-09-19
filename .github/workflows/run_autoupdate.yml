@@ -2,6 +2,11 @@ name: Run Autoupdate (manual)
 
 on:
   workflow_dispatch:
+    inputs:
+      create_issues:
+        description: 'Set to "yes" to allow creating GitHub issues (requires secrets to be configured)'
+        required: false
+        default: 'no'
 
 jobs:
   run-autoupdate:
@@ -15,15 +20,23 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Run autoupdate once
+      - name: Run autoupdate (safe)
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           ENABLE_AUTOUPDATE: 'false'
-          # Optional: set these secrets in the repository settings to allow the
-          # workflow to use the real GitHubUpdater (it will create issues).
+        run: |
+          echo "Running autoupdater (safe run). To enable real issue creation, re-run this workflow with 'create_issues=yes' and set required secrets."
+          go mod tidy
+          go run main.go --autoupdate
+
+      - name: Run autoupdate (create issues)
+        if: ${{ github.event.inputs.create_issues == 'yes' && secrets.GITHUB_TOKEN != '' && secrets.GITHUB_REPO != '' }}
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ENABLE_AUTOUPDATE: 'false'
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
         run: |
-          echo "Running autoupdater (manual). If GITHUB_TOKEN/GITHUB_REPO are set, real issues may be created."
+          echo "Running autoupdater with real GitHubUpdater (issues will be created)."
           go mod tidy
           go run main.go --autoupdate
