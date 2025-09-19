@@ -9,6 +9,8 @@ A modern, scalable crowdfunding platform built with Go, featuring user authentic
 
 > There is no doubt that in the new era of AI, every person and every endeavor can become the center of the world. Every voice, every hope, deserves to be heard and cared for. Technology is no longer a barrier — it effortlessly serves people. Let the power of a community support a single hope. Start now: everyone can crowdfund.
 
+> 新しいAIの時代において、誰もが、どんな取り組みも世界の中心になり得ます。一人ひとりの声や希望は、聞かれ、大切にされるべきです。技術はもはや障壁ではなく、人々に自然に寄り添います。コミュニティの力で、ひとつの希望を支えましょう。今すぐ始めてください：誰でもクラウドファンディングができます。
+
 ## Table of Contents
 
 - [Features](#features)

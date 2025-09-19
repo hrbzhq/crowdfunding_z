@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CrowdfundingZ — Demo</title>
+  <style>
+    :root{--accent:#0b6efd;--muted:#666}
+    body{font-family:Inter,Segoe UI,Arial;margin:20px;max-width:980px}
+    header{display:flex;align-items:center;justify-content:space-between}
+    h1{margin:0 0 8px}
+    .card{border:1px solid #e6e6e6;padding:12px;border-radius:8px;margin:12px 0}
+    input,button,textarea,select{font-size:14px;padding:8px;margin:6px 0;width:100%;box-sizing:border-box}
+    .row{display:flex;gap:8px}
+    .row>.col{flex:1}
+    .projects{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+    .proj{border:1px solid #ddd;padding:10px;border-radius:6px}
+    .progress{height:12px;background:#f1f1f1;border-radius:6px;overflow:hidden}
+    .progress > i{display:block;height:100%;background:var(--accent)}
+    footer{margin-top:24px;color:var(--muted);font-size:13px}
+    .small{font-size:13px;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>CrowdfundingZ — Demo UI</h1>
+      <div class="small">A minimal frontend to exercise the API (register, login, create, publish, fund).</div>
+    </div>
+    <div style="min-width:220px">
+      <div id="userBox" class="small">Not logged in</div>
+    </div>
+  </header>
+
+  <section class="card" id="authCard">
+    <h2>Authentication</h2>
+    <div id="authForms">
+      <div style="display:flex;gap:8px">
+        <div style="flex:1">
+          <input id="reg_email" placeholder="Email for register" />
+          <input id="reg_password" placeholder="Password" type="password" />
+          <button id="btnRegister">Register</button>
+          <div id="reg_out" class="small"></div>
+        </div>
+        <div style="flex:1">
+          <input id="login_email" placeholder="Email for login" />
+          <input id="login_password" placeholder="Password" type="password" />
+          <button id="btnLogin">Login</button>
+          <div id="login_out" class="small"></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <button id="btnLogout" style="display:none">Logout</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Create Project (Authenticated)</h2>
+    <input id="proj_title" placeholder="Title" />
+    <textarea id="proj_description" placeholder="Short description"></textarea>
+    <input id="proj_goal" placeholder="Goal (e.g. 1000)" />
+    <input id="proj_deadline" placeholder="Deadline (YYYY-MM-DD)" />
+    <button id="btnCreate">Create Project</button>
+    <div id="create_out" class="small"></div>
+  </section>
+
+  <section class="card">
+    <h2>Projects</h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <div style="flex:1"><input id="filter_status" placeholder="Filter status (published|draft)" /></div>
+      <div><button id="btnRefresh">Refresh</button></div>
+    </div>
+    <div id="projects" class="projects"></div>
+  </section>
+
+  <footer>
+    <div class="small">This demo uses a simple WebSocket echo endpoint at <code>/ws</code> to trigger UI refreshes. Use responsibly.</div>
+  </footer>
+
+  <script>
+    const api = '';
+    let token = localStorage.getItem('token') || '';
+    let me = null;
+    const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+    let ws = null;
+
+    function setUserBox(){
+      const el = document.getElementById('userBox');
+      if(token){ el.textContent = 'Authenticated (token stored)'; document.getElementById('btnLogout').style.display='inline-block' } else { el.textContent='Not logged in'; document.getElementById('btnLogout').style.display='none' }
+    }
+
+    setUserBox();
+
+    async function postJSON(url, body, auth=false){
+      const headers = {'Content-Type':'application/json'};
+      if(auth && token) headers['Authorization'] = 'Bearer ' + token;
+      const res = await fetch(api + url, { method: 'POST', headers, body: JSON.stringify(body) });
+      const t = await res.text();
+      try { return {ok: res.ok, status: res.status, body: JSON.parse(t)} } catch(e){ return {ok: res.ok, status: res.status, body: t} }
+    }
+
+    async function getJSON(url, auth=false){
+      const headers = {};
+      if(auth && token) headers['Authorization']='Bearer ' + token;
+      const res = await fetch(api + url, {headers});
+      const txt = await res.text();
+      try { return {ok: res.ok, status: res.status, body: JSON.parse(txt)} } catch(e){ return {ok: res.ok, status: res.status, body: txt} }
+    }
+
+    document.getElementById('btnRegister').onclick = async () => {
+      const email = document.getElementById('reg_email').value;
+      const password = document.getElementById('reg_password').value;
+      const r = await postJSON('/register', {email, password});
+      document.getElementById('reg_out').textContent = r.status + ' ' + JSON.stringify(r.body);
+    }
+
+    document.getElementById('btnLogin').onclick = async () => {
+      const email = document.getElementById('login_email').value;
+      const password = document.getElementById('login_password').value;
+      const r = await postJSON('/login', {email, password});
+      if(r.ok && r.body && r.body.token){ token = r.body.token; localStorage.setItem('token', token); document.getElementById('login_out').textContent='Logged in'; setUserBox(); connectWS(); }
+      else { document.getElementById('login_out').textContent = r.status + ' ' + JSON.stringify(r.body) }
+    }
+
+    document.getElementById('btnLogout').onclick = () => { token=''; localStorage.removeItem('token'); setUserBox(); if(ws){ ws.close(); ws=null } }
+
+    document.getElementById('btnCreate').onclick = async () => {
+      const title = document.getElementById('proj_title').value;
+      const description = document.getElementById('proj_description').value;
+      const goal = parseFloat(document.getElementById('proj_goal').value || '0');
+      const deadline = document.getElementById('proj_deadline').value;
+      const r = await postJSON('/projects', {title, description, goal, deadline}, true);
+      document.getElementById('create_out').textContent = r.status + ' ' + JSON.stringify(r.body);
+      if(r.ok) refreshProjects();
+    }
+
+    document.getElementById('btnRefresh').onclick = () => refreshProjects();
+
+    function renderProject(p){
+      const div = document.createElement('div'); div.className='proj';
+      const title = document.createElement('h3'); title.textContent = p.Title || p.title || ('#'+(p.ID||p.id)); div.appendChild(title);
+      const desc = document.createElement('div'); desc.textContent = p.Description || p.description || ''; div.appendChild(desc);
+      const meta = document.createElement('div'); meta.className='small'; meta.textContent = 'Status: ' + (p.Status||p.status||'') + ' | Goal: ' + (p.Goal||p.goal) + ' | Raised: ' + (p.Raised||p.raised); div.appendChild(meta);
+      const prog = document.createElement('div'); prog.className='progress'; const bar = document.createElement('i'); const percent = Math.min(100, Math.round(((p.Raised||p.raised||0)/(p.Goal||p.goal||1))*100)); bar.style.width = percent + '%'; prog.appendChild(bar); div.appendChild(prog);
+
+      const controls = document.createElement('div'); controls.style.marginTop='8px';
+      if((p.Status||p.status) === 'draft'){
+        const pub = document.createElement('button'); pub.textContent='Publish'; pub.onclick = async () => { const id = p.ID || p.id; const r = await fetch('/projects/'+id+'/publish', {method:'POST', headers: {'Authorization':'Bearer '+token}}); const t=await r.text(); alert(r.status + ' ' + t); refreshProjects(); }; controls.appendChild(pub);
+      }
+      if((p.Status||p.status) === 'published'){
+        const fundInput = document.createElement('input'); fundInput.placeholder='Amount'; fundInput.style.width='60%';
+        const fundBtn = document.createElement('button'); fundBtn.textContent='Fund'; fundBtn.onclick = async () => { const id = p.ID || p.id; const amt = parseFloat(fundInput.value||'0'); const r = await fetch('/projects/'+id+'/fund', {method:'POST', headers: {'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({amount:amt})}); const t=await r.text(); alert(r.status + ' ' + t); refreshProjects(); };
+        controls.appendChild(fundInput); controls.appendChild(fundBtn);
+      }
+      div.appendChild(controls);
+      return div;
+    }
+
+    async function refreshProjects(){
+      const status = document.getElementById('filter_status').value || '';
+      const q = status ? ('?status='+encodeURIComponent(status)) : '';
+      const r = await getJSON('/projects'+q, token?true:false);
+      const container = document.getElementById('projects'); container.innerHTML='';
+      if(r.ok && Array.isArray(r.body)){
+        r.body.forEach(p => container.appendChild(renderProject(p)));
+      } else {
+        container.textContent = 'Failed to load projects: ' + JSON.stringify(r.body);
+      }
+    }
+
+    // WebSocket auto-refresh: simple echo-based trigger
+    function connectWS(){
+      if(ws) return;
+      try{
+        ws = new WebSocket(wsUrl);
+        ws.onopen = () => { console.log('WS open'); ws.send(JSON.stringify({type:'hello'})); }
+        ws.onmessage = (ev) => { console.log('WS msg', ev.data); // trigger a refresh when any message arrives
+          try{ const d = JSON.parse(ev.data); if(d && d.type==='refresh') refreshProjects(); else refreshProjects(); }catch(e){ refreshProjects(); }
+        }
+        ws.onclose = () => { console.log('WS closed'); ws=null; }
+        ws.onerror = (e) => { console.log('WS error', e); ws=null }
+      }catch(e){ console.log('WS init failed', e); ws=null }
+    }
+
+    // Fallback: periodic polling
+    setInterval(() => { refreshProjects() }, 15_000);
+
+    // initial
+    refreshProjects();
+    if(token) connectWS();
+
+  </script>
+</body>
+</html>
