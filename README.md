@@ -194,35 +194,73 @@ CI で利用する場合、autoupdater を一度だけ実行する手動トリ�
 
 ### Setting up GitHub Actions for Autoupdate
 
-要安全地在 GitHub Actions 中启用 autoupdate 并可选创建 GitHub issues，请按以下步骤配置：
+English
 
-#### 1. 添加仓库 Secrets
-在你的 GitHub 仓库中，导航到 **Settings** → **Secrets and variables** → **Actions**，添加以下 secrets：
+To safely enable autoupdate in GitHub Actions and optionally create GitHub issues, follow these steps.
 
-- `JWT_SECRET`: 一个长随机字符串，用于 JWT 签名（例如，使用 `openssl rand -hex 32` 生成）。
-- `GITHUB_TOKEN`: 一个具有 `repo:issues` 权限的 personal access token (PAT)。创建 PAT 时，选择最小权限：勾选 "repo" 下的 "issues"。
-- `GITHUB_REPO`: 目标仓库的名称，格式为 `owner/repo`（例如 `yourusername/yourrepo`）。这指定在哪里创建 issues。
+1) Add repository secrets
 
-**安全提示**: 不要在代码中硬编码这些值。PAT 应定期轮换，并在不需要时删除。
+Go to your repository's Settings → Secrets and variables → Actions and add the following secrets:
 
-#### 2. 触发 Workflow
-- 转到仓库的 **Actions** 标签页。
-- 选择 `Run Autoupdate (manual)` workflow。
-- 点击 **Run workflow**。
-- 默认情况下，`create_issues` 设置为 `no`，这将运行 autoupdater 但不会创建真实 issues（使用 MockUpdater）。
-- 如果你想启用真实 issue 创建，将 `create_issues` 设置为 `yes`（仅当 secrets 已配置时有效）。
+- `JWT_SECRET`: a long random string used to sign JWTs (e.g. `openssl rand -hex 32`).
+- `GITHUB_TOKEN`: a Personal Access Token (PAT) with `repo:issues` permission if you want the updater to create issues. Prefer using the built-in `secrets.GITHUB_TOKEN` where possible; if a PAT is needed, create one with the minimum scope required.
+- `GITHUB_REPO`: the target repository in `owner/repo` format (e.g. `yourusername/yourrepo`). This tells the updater where to create issues.
 
-#### 3. 安全测试步骤
-为了避免在生产仓库中意外创建 issues，先在测试仓库中验证：
+Security note: Do not hard-code these values in code. Rotate PATs regularly and remove them when no longer needed.
 
-1. 创建一个新的私有 GitHub 仓库作为测试环境。
-2. 将代码推送到测试仓库。
-3. 在测试仓库中添加上述 secrets（使用测试 PAT 和测试仓库名称）。
-4. 触发 workflow 并设置 `create_issues=yes`，观察是否成功创建 issues。
-5. 验证后，删除测试仓库或清理创建的 issues。
-6. 然后在生产仓库中重复步骤 1-4。
+2) Trigger the workflow
 
-如果 workflow 失败，检查日志以获取错误详情（例如，token 权限不足或网络问题）。
+- Go to the repository's Actions tab.
+- Select the `Run Autoupdate (manual)` workflow.
+- Click **Run workflow**.
+- By default the workflow runs a safe (mock) updater (`create_issues=no`). To enable real issue creation, re-run with `create_issues=yes` and ensure required secrets are configured.
+
+3) Safety test steps
+
+Before enabling issue creation on a production repository, validate the workflow in a test repository:
+
+1. Create a new private repository for testing.
+2. Push the code to the test repository.
+3. Add the secrets listed above to the test repository (use a test PAT if needed).
+4. Run the workflow with `create_issues=yes` and verify that issues are created as expected.
+5. After verification, delete the test repository or clean up test issues.
+6. Once confident, repeat the steps in the production repository.
+
+If the workflow fails, check the Actions logs for details (common causes: insufficient token scopes or network access).
+
+日本語
+
+GitHub Actions で autoupdate を安全に実行し、必要に応じて GitHub Issue を作成するには、次の手順に従ってください。
+
+1) リポジトリシークレットの追加
+
+リポジトリの Settings → Secrets and variables → Actions に移動し、次のシークレットを追加します：
+
+- `JWT_SECRET`: JWT の署名に使用する長いランダム文字列（例: `openssl rand -hex 32`）。
+- `GITHUB_TOKEN`: Issue 作成が必要な場合、`repo:issues` 権限を持つ Personal Access Token (PAT)。可能であれば `secrets.GITHUB_TOKEN`（ワークフロー組み込みトークン）を利用してください。PAT を作成する場合は必要最小限のスコープにしてください。
+- `GITHUB_REPO`: 対象リポジトリを `owner/repo` 形式で指定（例: `yourusername/yourrepo`）。
+
+セキュリティ注意: これらの値をコードにハードコーディングしないでください。PAT は定期的にローテーションし、不要時は削除してください。
+
+2) ワークフローのトリガー
+
+- リポジトリの Actions タブを開きます。
+- `Run Autoupdate (manual)` ワークフローを選択します。
+- **Run workflow** を押します。
+- デフォルトでは `create_issues=no`（安全なモック実行）で動作します。Issue 作成を有効にするには `create_issues=yes` で再実行し、必要なシークレットが設定されていることを確認してください。
+
+3) 安全テスト手順
+
+本番リポジトリで直接 Issue を作成する前に、テスト用リポジトリで動作確認を行ってください：
+
+1. テスト用のプライベートリポジトリを作成します。
+2. コードをテストリポジトリにプッシュします。
+3. 上述のシークレットをテストリポジトリに追加します（テスト用 PAT を使用）。
+4. `create_issues=yes` でワークフローを実行し、Issue が正しく作成されるか確認します。
+5. 検証後、テスト用リポジトリを削除するか、作成した Issue をクリーンアップします。
+6. 問題なければ本番リポジトリで同じ手順を実行します。
+
+ワークフローが失敗する場合、Actions のログを確認してください。よくある原因はトークンのスコープ不足やネットワークアクセスです。
 
 ### JWT secret
 
