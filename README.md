@@ -156,21 +156,41 @@ The global crowdfunding market is experiencing rapid growth, with projections re
 
 ### Autoupdate (CLI)
 
-从 v1 起，应用支持一个命令行标志 `--autoupdate`，用于启用 autoupdater 调度器。命令行标志优先于 `ENABLE_AUTOUPDATE` 环境变量，适合在 CI/一次性运行中使用。
+English
 
-示例（通过 CLI 在 CI 中一次性运行 autoupdater）：
+Starting from v1, the application supports the `--autoupdate` command-line flag to run the autoupdater scheduler. The CLI flag takes precedence over the `ENABLE_AUTOUPDATE` environment variable and is convenient for one-off runs such as in CI jobs.
+
+Example (one-off run via CLI):
 
 ```powershell
 go run main.go --autoupdate
 ```
 
-可以通过 `--autoupdate-interval` 或 `AUTOSCHED_INTERVAL` 环境变量配置调度器间隔（例如 `30m`、`1h`）。命令行标志优先于环境变量：
+You can configure the scheduler interval using the `--autoupdate-interval` flag or the `AUTOSCHED_INTERVAL` environment variable (examples: `30m`, `1h`). Command-line flags override environment variables:
 
 ```powershell
 go run main.go --autoupdate --autoupdate-interval=30m
 ```
 
-在 GitHub Actions 中，你可以创建一个手动触发的 workflow 来运行一次 autoupdate：见 `.github/workflows/run_autoupdate.yml`（仓库内示例）。
+For CI usage, you can create a manual GitHub Actions workflow that runs the autoupdater once; see `.github/workflows/run_autoupdate.yml` in this repository for an example.
+
+日本語
+
+v1 以降、このアプリケーションは autoupdater スケジューラを実行するためのコマンドラインフラグ `--autoupdate` をサポートしています。コマンドラインフラグは環境変数 `ENABLE_AUTOUPDATE` より優先され、CI ジョブなどの一時的な実行に便利です。
+
+例（CLI による一回実行）:
+
+```powershell
+go run main.go --autoupdate
+```
+
+スケジューラの間隔は `--autoupdate-interval` フラグまたは環境変数 `AUTOSCHED_INTERVAL`（例: `30m`, `1h`）で設定できます。コマンドラインフラグが環境変数より優先されます:
+
+```powershell
+go run main.go --autoupdate --autoupdate-interval=30m
+```
+
+CI で利用する場合、autoupdater を一度だけ実行する手動トリガー型の GitHub Actions ワークフローを作成できます。リポジトリ内の `.github/workflows/run_autoupdate.yml` を参照してください。
 
 ### Setting up GitHub Actions for Autoupdate
 
