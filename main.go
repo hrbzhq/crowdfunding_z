@@ -65,9 +65,21 @@ func main() {
 	// Create Gin router
 	r := gin.Default()
 
+	// Serve simple demo UI at root
+	r.GET("/", func(c *gin.Context) {
+		c.File("./web/index.html")
+	})
+
 	// Routes
 	r.POST("/register", handlers.Register)
 	r.POST("/login", handlers.Login)
+
+	// Dev-only endpoints
+	if strings.ToLower(os.Getenv("ENABLE_DEV_ENDPOINTS")) == "true" {
+		r.POST("/dev/seed", handlers.DevSeedHandler)
+		log.Println("Dev endpoints enabled: POST /dev/seed")
+	}
+
 	r.GET("/projects", handlers.GetProjects)
 	// Protected routes
 	auth := r.Group("/")

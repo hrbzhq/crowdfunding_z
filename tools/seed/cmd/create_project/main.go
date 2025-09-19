@@ -1,6 +1,22 @@
-package seed
+package main
 
-// placeholder: original CLI moved to tools/seed/cmd/create_project
+import (
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"crowdfunding/database"
+	"crowdfunding/models"
+	"golang.org/x/crypto/bcrypt"
+)
+
+func main() {
+	// Use default DB (or DATABASE_URL if set)
+	database.InitDB()
+	// ensure owner user exists
+	email := "neuro@muscle.ai"
+	username := "neuro_owner"
 	password := "ChangeMe123!"
 
 	var user models.User

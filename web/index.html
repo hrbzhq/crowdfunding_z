@@ -63,6 +63,10 @@
     <input id="proj_deadline" placeholder="Deadline (YYYY-MM-DD)" />
     <button id="btnCreate">Create Project</button>
     <div id="create_out" class="small"></div>
+    <div style="margin-top:8px">
+      <button id="btnSeed">Load sample data</button>
+      <div id="seed_out" class="small"></div>
+    </div>
   </section>
 
   <section class="card">
@@ -140,6 +144,14 @@
     }
 
     document.getElementById('btnRefresh').onclick = () => refreshProjects();
+    document.getElementById('btnSeed').onclick = async () => {
+      try{
+        const res = await fetch('/dev/seed', {method:'POST'});
+        const txt = await res.text();
+        document.getElementById('seed_out').textContent = res.status + ' ' + txt;
+        if(res.ok) refreshProjects();
+      }catch(e){ document.getElementById('seed_out').textContent = 'Request failed: '+e }
+    }
 
     function renderProject(p){
       const div = document.createElement('div'); div.className='proj';
