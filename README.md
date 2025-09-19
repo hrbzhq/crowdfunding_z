@@ -168,6 +168,38 @@ go run main.go --autoupdate --autoupdate-interval=30m
 
 在 GitHub Actions 中，你可以创建一个手动触发的 workflow 来运行一次 autoupdate：见 `.github/workflows/run_autoupdate.yml`（仓库内示例）。
 
+### Setting up GitHub Actions for Autoupdate
+
+要安全地在 GitHub Actions 中启用 autoupdate 并可选创建 GitHub issues，请按以下步骤配置：
+
+#### 1. 添加仓库 Secrets
+在你的 GitHub 仓库中，导航到 **Settings** → **Secrets and variables** → **Actions**，添加以下 secrets：
+
+- `JWT_SECRET`: 一个长随机字符串，用于 JWT 签名（例如，使用 `openssl rand -hex 32` 生成）。
+- `GITHUB_TOKEN`: 一个具有 `repo:issues` 权限的 personal access token (PAT)。创建 PAT 时，选择最小权限：勾选 "repo" 下的 "issues"。
+- `GITHUB_REPO`: 目标仓库的名称，格式为 `owner/repo`（例如 `yourusername/yourrepo`）。这指定在哪里创建 issues。
+
+**安全提示**: 不要在代码中硬编码这些值。PAT 应定期轮换，并在不需要时删除。
+
+#### 2. 触发 Workflow
+- 转到仓库的 **Actions** 标签页。
+- 选择 `Run Autoupdate (manual)` workflow。
+- 点击 **Run workflow**。
+- 默认情况下，`create_issues` 设置为 `no`，这将运行 autoupdater 但不会创建真实 issues（使用 MockUpdater）。
+- 如果你想启用真实 issue 创建，将 `create_issues` 设置为 `yes`（仅当 secrets 已配置时有效）。
+
+#### 3. 安全测试步骤
+为了避免在生产仓库中意外创建 issues，先在测试仓库中验证：
+
+1. 创建一个新的私有 GitHub 仓库作为测试环境。
+2. 将代码推送到测试仓库。
+3. 在测试仓库中添加上述 secrets（使用测试 PAT 和测试仓库名称）。
+4. 触发 workflow 并设置 `create_issues=yes`，观察是否成功创建 issues。
+5. 验证后，删除测试仓库或清理创建的 issues。
+6. 然后在生产仓库中重复步骤 1-4。
+
+如果 workflow 失败，检查日志以获取错误详情（例如，token 权限不足或网络问题）。
+
 ### JWT secret
 
 The application reads the `JWT_SECRET` environment variable at startup. If not set, a default (insecure) secret will be used and a warning will be logged. For CI and production, set `JWT_SECRET` to a long random value.
