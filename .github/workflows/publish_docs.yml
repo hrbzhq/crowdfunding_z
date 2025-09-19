@@ -1,0 +1,32 @@
+name: Publish Docs to GitHub Pages
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'docs/**'
+  workflow_dispatch: {}
+
+permissions:
+  pages: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node (optional for some static site generators)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          # Use the repository's GitHub token; this is automatically provided in Actions.
+          github_token: ${{ secrets.GITHUB_TOKEN }}
