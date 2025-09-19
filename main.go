@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"strings"
@@ -14,11 +15,15 @@ import (
 )
 
 func main() {
+	// CLI flags
+	autoFlag := flag.Bool("autoupdate", false, "Enable autoupdater (overrides ENABLE_AUTOUPDATE env)")
+	flag.Parse()
+
 	// Initialize database
 	database.InitDB()
-
-	// Optionally start autoupdater scheduler if enabled via env
-	if strings.ToLower(os.Getenv("ENABLE_AUTOUPDATE")) == "true" {
+	// Optionally start autoupdater scheduler if enabled via CLI flag or env
+	enabled := shouldEnableAutoupdate(os.Args[1:], os.Getenv("ENABLE_AUTOUPDATE")) || *autoFlag
+	if enabled {
 		// build fetcher
 		var fetcher autoupdater.Fetcher
 		urls := os.Getenv("AUTOFETCH_URLS")
@@ -68,4 +73,17 @@ func main() {
 	if err := r.Run(":8080"); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+}
+
+// shouldEnableAutoupdate decides whether autoupdater should be enabled based on
+// provided CLI args and the ENABLE_AUTOUPDATE env value. This helper keeps the
+// logic testable. It returns true if args contain "--autoupdate" or if
+// envEnable equals "true" (case-insensitive).
+func shouldEnableAutoupdate(args []string, envEnable string) bool {
+	for _, a := range args {
+		if a == "--autoupdate" {
+			return true
+		}
+	}
+	return strings.ToLower(envEnable) == "true"
 }

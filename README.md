@@ -150,6 +150,18 @@ The global crowdfunding market is experiencing rapid growth, with projections re
 - Port: 8080 (configurable)
 - JWT Secret: Configurable via environment variables
 
+### Autoupdate (CLI)
+
+从 v1 起，应用支持一个命令行标志 `--autoupdate`，用于启用 autoupdater 调度器。命令行标志优先于 `ENABLE_AUTOUPDATE` 环境变量，适合在 CI/一次性运行中使用。
+
+示例（通过 CLI 在 CI 中一次性运行 autoupdater）：
+
+```powershell
+go run main.go --autoupdate
+```
+
+在 GitHub Actions 中，你可以创建一个手动触发的 workflow 来运行一次 autoupdate：见 `.github/workflows/run_autoupdate.yml`（仓库内示例）。
+
 ### JWT secret
 
 The application reads the `JWT_SECRET` environment variable at startup. If not set, a default (insecure) secret will be used and a warning will be logged. For CI and production, set `JWT_SECRET` to a long random value.
