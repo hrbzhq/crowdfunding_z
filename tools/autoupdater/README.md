@@ -45,6 +45,26 @@ $env:ENABLE_AUTOUPDATE = "true"
 go run main.go
 ```
 
+CLI 标志（新）
+----------------
+
+从 v1 版本起，`main.go` 增加了一个命令行标志 `--autoupdate`。当该标志存在时，会启用 autoupdater 调度器；命令行标志优先于环境变量 `ENABLE_AUTOUPDATE`。这便于在一次性运行或 CI/任务调度中显式控制 autoupdater 行为。
+
+示例（通过 CLI 启用）：
+
+```powershell
+go run main.go --autoupdate
+```
+
+示例（同时使用 CLI 与环境变量）：
+
+```powershell
+$env:ENABLE_AUTOUPDATE = "false"
+go run main.go --autoupdate   # CLI 标志优先，autoupdater 仍然会被启用
+```
+
+注意：在自动化脚本/CI 中，推荐使用命令行标志来明确表达意图，或者在 CI 的运行步骤中通过环境变量设置 `ENABLE_AUTOUPDATE=true`。如果同时设置了二者，CLI 标志会覆盖环境变量。
+
 示例（远程抓取并创建 GitHub issue）：
 
 ```powershell
