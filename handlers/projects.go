@@ -3,10 +3,11 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
-	"github.com/gin-gonic/gin"
-	"crowdfunding/models"
 	"crowdfunding/database"
+	"crowdfunding/models"
+	"github.com/gin-gonic/gin"
 )
 
 type CreateProjectRequest struct {
@@ -18,7 +19,45 @@ type CreateProjectRequest struct {
 
 func GetProjects(c *gin.Context) {
 	var projects []models.Project
-	database.DB.Find(&projects)
+	// Optional status filter: ?status=published or ?status=draft
+	status := c.Query("status")
+	if status != "" {
+		// If a status is requested, only allow querying drafts when authenticated and owner
+		if status == "draft" {
+			// require authentication
+			uidRaw, ok := c.Get("user_id")
+			if !ok {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization required to view drafts"})
+				return
+			}
+			uid, ok := uidRaw.(uint)
+			if !ok {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id in context"})
+				return
+			}
+			database.DB.Where("status = ? AND user_id = ?", status, uid).Find(&projects)
+			c.JSON(http.StatusOK, projects)
+			return
+		}
+
+		database.DB.Where("status = ?", status).Find(&projects)
+		c.JSON(http.StatusOK, projects)
+		return
+	}
+
+	// By default, show only published projects to unauthenticated users.
+	// If the requester is authenticated and wants drafts, allow fetching drafts owned by the user.
+	// If authenticated, show user's projects (both draft and published)
+	if uidRaw, ok := c.Get("user_id"); ok {
+		if uid, ok := uidRaw.(uint); ok {
+			database.DB.Where("user_id = ?", uid).Find(&projects)
+			c.JSON(http.StatusOK, projects)
+			return
+		}
+	}
+
+	// Default: only show published projects
+	database.DB.Where("status = ?", "published").Find(&projects)
 	c.JSON(http.StatusOK, projects)
 }
 
@@ -35,6 +74,7 @@ func CreateProject(c *gin.Context) {
 		Goal:        req.Goal,
 		Deadline:    req.Deadline,
 		Raised:      0,
+		Status:      "draft",
 	}
 	// If user_id is available in context (from AuthMiddleware), set it
 	if uid, exists := c.Get("user_id"); exists {
@@ -48,6 +88,44 @@ func CreateProject(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, project)
+}
+
+// PublishProject marks a draft project as published. Requires authentication and ownership.
+func PublishProject(c *gin.Context) {
+	id := c.Param("id")
+	projectID, err := strconv.Atoi(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid project ID"})
+		return
+	}
+
+	var project models.Project
+	if err := database.DB.First(&project, projectID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Project not found"})
+		return
+	}
+
+	// check ownership
+	var uid uint
+	if ctxUID, ok := c.Get("user_id"); ok {
+		if u, ok := ctxUID.(uint); ok {
+			uid = u
+		}
+	}
+	if uid == 0 || project.UserID != uid {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized to publish this project"})
+		return
+	}
+
+	now := time.Now()
+	project.Status = "published"
+	project.PublishedAt = &now
+	if err := database.DB.Save(&project).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish project"})
+		return
+	}
+
+	c.JSON(http.StatusOK, project)
 }
 
 func FundProject(c *gin.Context) {
@@ -75,10 +153,13 @@ func FundProject(c *gin.Context) {
 		return
 	}
 
-	project.Raised += req.Amount
-	database.DB.Save(&project)
+	// Only allow funding on published projects
+	if project.Status != "published" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "project is not open for funding"})
+		return
+	}
 
-	// Create funding record: user_id must come from the auth middleware.
+	// user_id must be provided by auth middleware
 	var uid uint
 	if ctxUID, ok := c.Get("user_id"); ok {
 		if u, ok := ctxUID.(uint); ok {
@@ -86,8 +167,16 @@ func FundProject(c *gin.Context) {
 		}
 	}
 	if uid == 0 {
-		// If middleware didn't provide a user id, the request is unauthorized.
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "authorization required"})
+		return
+	}
+
+	// Update raised amount and create funding record in a transaction
+	tx := database.DB.Begin()
+	project.Raised += req.Amount
+	if err := tx.Save(&project).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to apply funding"})
 		return
 	}
 
@@ -96,7 +185,12 @@ func FundProject(c *gin.Context) {
 		UserID:    uid,
 		Amount:    req.Amount,
 	}
-	database.DB.Create(&funding)
+	if err := tx.Create(&funding).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record funding"})
+		return
+	}
+	tx.Commit()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Funding successful"})
 }

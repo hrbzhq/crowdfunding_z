@@ -3,9 +3,9 @@ package main
 import (
 	"log"
 
-	"github.com/gin-gonic/gin"
-	"crowdfunding/handlers"
 	"crowdfunding/database"
+	"crowdfunding/handlers"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -19,8 +19,12 @@ func main() {
 	r.POST("/register", handlers.Register)
 	r.POST("/login", handlers.Login)
 	r.GET("/projects", handlers.GetProjects)
-	r.POST("/projects", handlers.CreateProject)
-	r.POST("/projects/:id/fund", handlers.FundProject)
+	// Protected routes
+	auth := r.Group("/")
+	auth.Use(handlers.AuthMiddleware())
+	auth.POST("/projects", handlers.CreateProject)
+	auth.POST("/projects/:id/fund", handlers.FundProject)
+	auth.POST("/projects/:id/publish", handlers.PublishProject)
 	r.GET("/projects/:id/progress", handlers.GetProgress)
 
 	// WebSocket for real-time updates

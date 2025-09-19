@@ -28,3 +28,7 @@ go run tools/selftest/selftest.go
 CI
 
 You can add the self-test to CI by running `go run tools/selftest/selftest.go` in your workflow.
+
+JWT secret
+
+Set `JWT_SECRET` in your CI secrets (e.g. GitHub Secrets) to provide a stable secret to the self-test program. In GitHub Actions, add a secret named `JWT_SECRET` and the workflow will expose it to the job environment.

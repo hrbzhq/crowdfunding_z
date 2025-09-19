@@ -11,9 +11,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"crowdfunding/database"
 	"crowdfunding/handlers"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -35,7 +35,8 @@ func main() {
 	a := r.Group("/")
 	a.Use(handlers.AuthMiddleware())
 	a.POST("/projects", handlers.CreateProject)
-	a.POST("/projects/:id/fund", handlers.FundProject)
+    a.POST("/projects/:id/fund", handlers.FundProject)
+    a.POST("/projects/:id/publish", handlers.PublishProject)
 	r.GET("/projects/:id/progress", handlers.GetProgress)
 
 	// Start test server
@@ -115,8 +116,49 @@ func main() {
 		return fmt.Errorf("project ID missing")
 	})
 
-	// 4) Fund project (authenticated)
-	printStep("FundProject", func() error {
+
+	// 4) Attempt to fund project BEFORE publish (should be forbidden)
+	printStep("FundBeforePublish", func() error {
+		fund := map[string]interface{}{"amount": 100.0}
+		b, _ := json.Marshal(fund)
+		req, _ := http.NewRequest("POST", fmt.Sprintf(ts.URL+"/projects/%d/fund", projectID), bytes.NewReader(b))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(body))
+		if resp.StatusCode != http.StatusForbidden {
+			return fmt.Errorf("expected forbidden when funding draft, got: %s", resp.Status)
+		}
+		return nil
+	})
+
+	// 5) Publish the project (authenticated)
+	printStep("PublishProject", func() error {
+		req, _ := http.NewRequest("POST", fmt.Sprintf(ts.URL+"/projects/%d/publish", projectID), nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		var res map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			return err
+		}
+		fmt.Println(res)
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("publish failed: %s", resp.Status)
+		}
+		return nil
+	})
+
+	// 6) Fund project (authenticated) AFTER publish
+	printStep("FundAfterPublish", func() error {
 		fund := map[string]interface{}{"amount": 100.0}
 		b, _ := json.Marshal(fund)
 		req, _ := http.NewRequest("POST", fmt.Sprintf(ts.URL+"/projects/%d/fund", projectID), bytes.NewReader(b))
@@ -130,7 +172,7 @@ func main() {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Println(string(body))
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("fund failed: %s", resp.Status)
+			return fmt.Errorf("fund failed after publish: %s", resp.Status)
 		}
 		return nil
 	})

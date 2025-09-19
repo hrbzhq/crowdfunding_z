@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"log"
 	"math/big"
 
@@ -12,8 +11,8 @@ import (
 
 // CrowdfundingContract represents a simple crowdfunding contract
 type CrowdfundingContract struct {
-	client     *ethclient.Client
-	contract   *bind.BoundContract
+	client       *ethclient.Client
+	contract     *bind.BoundContract
 	contractAddr common.Address
 }
 

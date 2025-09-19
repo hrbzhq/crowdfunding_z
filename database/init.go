@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
+	"crowdfunding/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"crowdfunding/models"
 )
 
 var DB *gorm.DB

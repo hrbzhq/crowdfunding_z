@@ -1,17 +1,27 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"os"
 	"time"
 
+	"crowdfunding/database"
+	"crowdfunding/models"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
-	"crowdfunding/models"
-	"crowdfunding/database"
 )
 
 var jwtSecret = []byte("your-secret-key")
+
+func init() {
+	if s := os.Getenv("JWT_SECRET"); s != "" {
+		jwtSecret = []byte(s)
+	} else {
+		log.Println("WARNING: JWT_SECRET not set; using default insecure secret. Set JWT_SECRET in environment for production.")
+	}
+}
 
 type RegisterRequest struct {
 	Username string `json:"username" binding:"required"`
@@ -48,7 +58,8 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
+	// Return the created user (Password is omitted by the JSON tag)
+	c.JSON(http.StatusCreated, user)
 }
 
 func Login(c *gin.Context) {
