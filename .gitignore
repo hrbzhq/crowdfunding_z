@@ -1,0 +1,17 @@
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# SQLite DB files
+*.db
+*.sqlite
+
+# Test/temp files
+*.test
+
+# Editor
+.vscode/
+*.swp
