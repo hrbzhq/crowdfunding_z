@@ -109,15 +109,17 @@
     }
 
     document.getElementById('btnRegister').onclick = async () => {
-      const email = document.getElementById('reg_email').value;
+      const email = document.getElementById('reg_email').value.trim();
       const password = document.getElementById('reg_password').value;
+      if(!email || !password){ document.getElementById('reg_out').textContent = 'Email and password required'; return }
       const r = await postJSON('/register', {email, password});
       document.getElementById('reg_out').textContent = r.status + ' ' + JSON.stringify(r.body);
     }
 
     document.getElementById('btnLogin').onclick = async () => {
-      const email = document.getElementById('login_email').value;
+      const email = document.getElementById('login_email').value.trim();
       const password = document.getElementById('login_password').value;
+      if(!email || !password){ document.getElementById('login_out').textContent = 'Email and password required'; return }
       const r = await postJSON('/login', {email, password});
       if(r.ok && r.body && r.body.token){ token = r.body.token; localStorage.setItem('token', token); document.getElementById('login_out').textContent='Logged in'; setUserBox(); connectWS(); }
       else { document.getElementById('login_out').textContent = r.status + ' ' + JSON.stringify(r.body) }
@@ -126,10 +128,12 @@
     document.getElementById('btnLogout').onclick = () => { token=''; localStorage.removeItem('token'); setUserBox(); if(ws){ ws.close(); ws=null } }
 
     document.getElementById('btnCreate').onclick = async () => {
-      const title = document.getElementById('proj_title').value;
-      const description = document.getElementById('proj_description').value;
+      if(!token){ document.getElementById('create_out').textContent = 'Please login first'; return }
+      const title = document.getElementById('proj_title').value.trim();
+      const description = document.getElementById('proj_description').value.trim();
       const goal = parseFloat(document.getElementById('proj_goal').value || '0');
-      const deadline = document.getElementById('proj_deadline').value;
+      const deadline = document.getElementById('proj_deadline').value.trim();
+      if(!title || !description || !deadline || !goal || isNaN(goal) || goal <= 0){ document.getElementById('create_out').textContent = 'Please provide a valid title, description, positive numeric goal and deadline'; return }
       const r = await postJSON('/projects', {title, description, goal, deadline}, true);
       document.getElementById('create_out').textContent = r.status + ' ' + JSON.stringify(r.body);
       if(r.ok) refreshProjects();
@@ -146,11 +150,24 @@
 
       const controls = document.createElement('div'); controls.style.marginTop='8px';
       if((p.Status||p.status) === 'draft'){
-        const pub = document.createElement('button'); pub.textContent='Publish'; pub.onclick = async () => { const id = p.ID || p.id; const r = await fetch('/projects/'+id+'/publish', {method:'POST', headers: {'Authorization':'Bearer '+token}}); const t=await r.text(); alert(r.status + ' ' + t); refreshProjects(); }; controls.appendChild(pub);
+        const pub = document.createElement('button'); pub.textContent='Publish'; pub.onclick = async () => {
+          if(!token){ document.getElementById('create_out').textContent='Login required to publish'; return }
+          const id = p.ID || p.id;
+          const resp = await fetch('/projects/'+id+'/publish', {method:'POST', headers: {'Authorization':'Bearer '+token}});
+          const txt = await resp.text();
+          document.getElementById('create_out').textContent = resp.status + ' ' + txt;
+          refreshProjects();
+        }; controls.appendChild(pub);
       }
       if((p.Status||p.status) === 'published'){
         const fundInput = document.createElement('input'); fundInput.placeholder='Amount'; fundInput.style.width='60%';
-        const fundBtn = document.createElement('button'); fundBtn.textContent='Fund'; fundBtn.onclick = async () => { const id = p.ID || p.id; const amt = parseFloat(fundInput.value||'0'); const r = await fetch('/projects/'+id+'/fund', {method:'POST', headers: {'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({amount:amt})}); const t=await r.text(); alert(r.status + ' ' + t); refreshProjects(); };
+        const fundBtn = document.createElement('button'); fundBtn.textContent='Fund'; fundBtn.onclick = async () => {
+          if(!token){ document.getElementById('create_out').textContent='Login required to fund'; return }
+          const id = p.ID || p.id; const amt = parseFloat(fundInput.value||'0');
+          if(isNaN(amt) || amt <= 0){ document.getElementById('create_out').textContent='Enter a positive amount'; return }
+          const r = await fetch('/projects/'+id+'/fund', {method:'POST', headers: {'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({amount:amt})});
+          const t=await r.text(); document.getElementById('create_out').textContent = r.status + ' ' + t; refreshProjects();
+        };
         controls.appendChild(fundInput); controls.appendChild(fundBtn);
       }
       div.appendChild(controls);

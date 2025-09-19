@@ -125,6 +125,9 @@ func PublishProject(c *gin.Context) {
 		return
 	}
 
+	// notify websocket clients that a project was published
+	BroadcastJSON(map[string]interface{}{"type": "project_published", "project_id": project.ID, "status": project.Status})
+
 	c.JSON(http.StatusOK, project)
 }
 
@@ -191,6 +194,9 @@ func FundProject(c *gin.Context) {
 		return
 	}
 	tx.Commit()
+
+	// notify websocket clients about funding update
+	BroadcastJSON(map[string]interface{}{"type": "project_funded", "project_id": uint(projectID), "raised": project.Raised, "goal": project.Goal})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Funding successful"})
 }
