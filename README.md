@@ -160,6 +160,12 @@ The global crowdfunding market is experiencing rapid growth, with projections re
 go run main.go --autoupdate
 ```
 
+可以通过 `--autoupdate-interval` 或 `AUTOSCHED_INTERVAL` 环境变量配置调度器间隔（例如 `30m`、`1h`）。命令行标志优先于环境变量：
+
+```powershell
+go run main.go --autoupdate --autoupdate-interval=30m
+```
+
 在 GitHub Actions 中，你可以创建一个手动触发的 workflow 来运行一次 autoupdate：见 `.github/workflows/run_autoupdate.yml`（仓库内示例）。
 
 ### JWT secret

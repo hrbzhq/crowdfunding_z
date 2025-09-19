@@ -17,6 +17,7 @@ import (
 func main() {
 	// CLI flags
 	autoFlag := flag.Bool("autoupdate", false, "Enable autoupdater (overrides ENABLE_AUTOUPDATE env)")
+	autoInterval := flag.String("autoupdate-interval", "", "Autoupdater interval duration (e.g. 30m, 1h). Overrides AUTOSCHED_INTERVAL env")
 	flag.Parse()
 
 	// Initialize database
@@ -43,7 +44,18 @@ func main() {
 			updater = autoupdater.NewGitHubUpdater(ghToken, ghRepo)
 		}
 
-		sched := autoupdater.NewScheduler(fetcher, analyzer, updater, 1*time.Hour)
+		// determine interval: CLI flag > env var > default 1h
+		interval := 1 * time.Hour
+		if *autoInterval != "" {
+			if d, err := time.ParseDuration(*autoInterval); err == nil {
+				interval = d
+			}
+		} else if env := os.Getenv("AUTOSCHED_INTERVAL"); env != "" {
+			if d, err := time.ParseDuration(env); err == nil {
+				interval = d
+			}
+		}
+		sched := autoupdater.NewScheduler(fetcher, analyzer, updater, interval)
 		ctx := context.Background()
 		sched.Start(ctx)
 		defer sched.Stop()

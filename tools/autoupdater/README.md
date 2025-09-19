@@ -65,6 +65,22 @@ go run main.go --autoupdate   # CLI 标志优先，autoupdater 仍然会被启�
 
 注意：在自动化脚本/CI 中，推荐使用命令行标志来明确表达意图，或者在 CI 的运行步骤中通过环境变量设置 `ENABLE_AUTOUPDATE=true`。如果同时设置了二者，CLI 标志会覆盖环境变量。
 
+调度间隔配置
+----------------
+
+你可以通过 `--autoupdate-interval` 命令行标志或 `AUTOSCHED_INTERVAL` 环境变量来配置调度器的运行间隔。命令行标志优先于环境变量。例如：
+
+```powershell
+go run main.go --autoupdate --autoupdate-interval=30m
+```
+
+或者：
+
+```powershell
+$env:AUTOSCHED_INTERVAL = "30m"
+go run main.go --autoupdate
+```
+
 示例（远程抓取并创建 GitHub issue）：
 
 ```powershell
