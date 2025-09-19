@@ -2,7 +2,6 @@ package seed
 
 import (
     "fmt"
-    "log"
     "time"
 
     "crowdfunding/database"
