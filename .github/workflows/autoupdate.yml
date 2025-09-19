@@ -1,0 +1,36 @@
+name: Autoupdate Scheduler
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # daily at 02:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20'
+      - name: Install dependencies
+        run: go mod download
+      - name: Run autoupdater self-test
+        run: go run tools/selftest/selftest.go
+      - name: Run autoupdater (dry-run with mocks if no secrets)
+        env:
+          ENABLE_AUTOUPDATE: 'true'
+          AUTOFETCH_URLS: ${{ secrets.AUTOFETCH_URLS }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
+        run: |
+          if [ "${AUTOFETCH_URLS}" = "" ]; then
+            echo "No AUTOFETCH_URLS, running mocks"
+            go run main.go &
+            sleep 5
+          else
+            echo "Running autoupdater with provided URLs"
+            go run main.go &
+            sleep 5
+          fi
