@@ -215,6 +215,63 @@ $env:JWT_SECRET = "a-very-secret-value"
 go run main.go
 ```
 
+## Development - Seeding & WebSocket testing
+
+During development it's convenient to populate the local database with example users, projects and fundings, and to test real-time broadcasts.
+
+1) Dev-only HTTP seeder endpoint
+
+- The server exposes a development-only endpoint `POST /dev/seed` which runs the seeder. This endpoint is only registered when the environment variable `ENABLE_DEV_ENDPOINTS` is set to `true`.
+
+Example (PowerShell):
+
+```powershell
+$env:ENABLE_DEV_ENDPOINTS = 'true'
+go run .
+
+# then in another shell:
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/dev/seed
+```
+
+The `Seed()` function is idempotent and safe to call multiple times — it checks for existing users and projects by email/title before creating new records.
+
+2) CLI seeder
+
+There is also a small CLI wrapper you can run directly:
+
+```powershell
+go run tools/seed/cmd/seed_data
+```
+
+3) WebSocket selftest
+
+To test real-time broadcasts (project published / project funded), a simple test client is provided at `tools/selftest/ws_client.go`.
+
+Run it like this (new terminal):
+
+```powershell
+go run tools/selftest/ws_client.go
+```
+
+Now trigger a funding or publish event (use a valid JWT):
+
+```powershell
+#$token = (Invoke-RestMethod -Method Post -Uri http://localhost:8080/login -Body (@{email='carol@example.com'; password='password3'} | ConvertTo-Json) -ContentType 'application/json').token
+#$headers = @{ Authorization = "Bearer $token" }
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/projects/9/fund -Body (@{amount=50} | ConvertTo-Json) -ContentType 'application/json' -Headers $headers
+```
+
+The WebSocket client will print received JSON messages such as:
+
+```
+{"type":"project_funded","project_id":9,"raised":200,"goal":2000}
+```
+
+4) Notes
+
+- Keep `ENABLE_DEV_ENDPOINTS` disabled in production. The dev seeder is intended only for local development.
+- If port `8080` is in use, stop the process using it or change the server port in `main.go`.
+
 ## API Documentation
 # CrowdfundingZ — Quick Start & API (English / 日本語)
 
